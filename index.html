@@ -23,6 +23,7 @@
       --accent-income: #3fb950;
       --accent-monthly: #a371f7;
       --accent-social: #f78166;
+      --accent-summary: #f9c513;
       --text-primary: #e6edf3;
       --text-secondary: #8b949e;
       --connection-line: #58a6ff;
@@ -97,6 +98,7 @@
     .btn-income { border-color: var(--accent-income); color: var(--accent-income); }
     .btn-monthly { border-color: var(--accent-monthly); color: var(--accent-monthly); }
     .btn-social { border-color: var(--accent-social); color: var(--accent-social); }
+    .btn-summary { border-color: var(--accent-summary); color: var(--accent-summary); }
 
     .btn-calculate {
       background: var(--accent-starting);
@@ -247,6 +249,7 @@
     .node[data-type="income"] { border-top: 4px solid var(--accent-income); }
     .node[data-type="monthly"] { border-top: 4px solid var(--accent-monthly); }
     .node[data-type="social"] { border-top: 4px solid var(--accent-social); }
+    .node[data-type="summary"] { border-top: 4px solid var(--accent-summary); }
 
     .node-header {
       display: flex;
@@ -270,6 +273,48 @@
     .node[data-type="income"] .node-title { color: var(--accent-income); }
     .node[data-type="monthly"] .node-title { color: var(--accent-monthly); }
     .node[data-type="social"] .node-title { color: var(--accent-social); }
+    .node[data-type="summary"] .node-title { color: var(--accent-summary); }
+
+    /* Summary node read-only display */
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 6px 0;
+      border-bottom: 1px dashed var(--border-default);
+      gap: 12px;
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+    }
+    .summary-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .summary-value.positive { color: var(--accent-income); }
+    .summary-value.negative { color: var(--accent-expense); }
+    .summary-value.neutral { color: var(--accent-summary); }
+    .summary-empty {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-style: italic;
+      text-align: center;
+      padding: 12px 0;
+    }
+    .summary-recalc-hint {
+      font-size: 9px;
+      color: var(--text-secondary);
+      text-align: center;
+      margin-top: 8px;
+      opacity: 0.7;
+    }
 
     .node-delete {
       width: 24px;
@@ -680,6 +725,7 @@
     <button class="btn btn-node btn-income" onclick="addNode('income')">+ Income</button>
     <button class="btn btn-node btn-monthly" onclick="addNode('monthly')">+ Monthly</button>
     <button class="btn btn-node btn-social" onclick="addNode('social')">+ Social Security</button>
+    <button class="btn btn-node btn-summary" onclick="addNode('summary')">+ Summary</button>
     <div class="toolbar-divider"></div>
     <button class="btn btn-calculate" onclick="calculate()">Calculate</button>
     <button class="btn btn-share" onclick="shareUrl()">Share</button>
@@ -750,8 +796,7 @@
         title: 'One Time Expense',
         fields: [
           { name: 'description', label: 'Description', type: 'text', value: '' },
-          { name: 'amount', label: 'Amount ($)', type: 'number', value: 0 },
-          { name: 'age', label: 'Age', type: 'number', value: 65 }
+          { name: 'amount', label: 'Amount ($)', type: 'number', value: 0 }
         ],
         hasInput: true,
         hasOutput: true
@@ -760,8 +805,7 @@
         title: 'One Time Income',
         fields: [
           { name: 'description', label: 'Description', type: 'text', value: '' },
-          { name: 'amount', label: 'Amount ($)', type: 'number', value: 0 },
-          { name: 'age', label: 'Age', type: 'number', value: 65 }
+          { name: 'amount', label: 'Amount ($)', type: 'number', value: 0 }
         ],
         hasInput: true,
         hasOutput: true
@@ -788,6 +832,13 @@
         ],
         hasInput: true,
         hasOutput: true
+      },
+      summary: {
+        title: 'Summary',
+        fields: [],
+        hasInput: true,
+        hasOutput: true,
+        readOnly: true
       }
     };
 
@@ -911,18 +962,24 @@
       el.style.top = nodeData.y + 'px';
 
       let fieldsHTML = '';
-      config.fields.forEach(f => {
-        const val = nodeData.fields[f.name] !== undefined ? nodeData.fields[f.name] : f.value;
-        fieldsHTML += `
-          <div class="node-field">
-            <label class="field-label">${f.label}</label>
-            <input type="${f.type}" class="field-input" 
-              data-field="${f.name}" 
-              value="${val}"
-              oninput="updateField('${nodeData.id}', '${f.name}', this.value)">
-          </div>
-        `;
-      });
+      if (config.readOnly) {
+        fieldsHTML = `<div class="summary-body" id="summary-body-${nodeData.id}">
+          <div class="summary-empty">Click Calculate to populate</div>
+        </div>`;
+      } else {
+        config.fields.forEach(f => {
+          const val = nodeData.fields[f.name] !== undefined ? nodeData.fields[f.name] : f.value;
+          fieldsHTML += `
+            <div class="node-field">
+              <label class="field-label">${f.label}</label>
+              <input type="${f.type}" class="field-input" 
+                data-field="${f.name}" 
+                value="${val}"
+                oninput="updateField('${nodeData.id}', '${f.name}', this.value)">
+            </div>
+          `;
+        });
+      }
 
       let portsHTML = '';
       if (config.hasInput) {
@@ -999,8 +1056,21 @@
       const node = nodes.find(n => n.id === nodeId);
       if (node) {
         node.fields[fieldName] = fieldName === 'description' ? value : (parseFloat(value) || 0);
+        markSummariesStale();
         saveState();
       }
+    }
+
+    function markSummariesStale() {
+      nodes.forEach(n => {
+        if (n.type === 'summary') {
+          const body = document.getElementById('summary-body-' + n.id);
+          if (body && !body.querySelector('.summary-empty')) {
+            // Dim existing values; user must press Calculate to refresh
+            body.style.opacity = '0.45';
+          }
+        }
+      });
     }
 
     // ============ CONNECTIONS ============
@@ -1083,12 +1153,14 @@
           if (tempConnection.from !== targetNodeId) {
             connections = connections.filter(c => c.to !== targetNodeId);
             connections.push({ from: tempConnection.from, to: targetNodeId });
+            markSummariesStale();
             saveState();
           }
         } else if (tempConnection.to && targetPortType === 'output') {
           if (tempConnection.to !== targetNodeId) {
             connections = connections.filter(c => c.to !== tempConnection.to);
             connections.push({ from: targetNodeId, to: tempConnection.to });
+            markSummariesStale();
             saveState();
           }
         }
@@ -1229,6 +1301,29 @@
     }
 
     // ============ CALCULATION ============
+    // Walk the directed chain starting from the Starting node, following
+    // output -> input connections. Returns an ordered list of nodes.
+    function getOrderedChain(startNodeId) {
+      const order = [];
+      const visited = new Set();
+      const queue = [startNodeId];
+      while (queue.length) {
+        const current = queue.shift();
+        if (visited.has(current)) continue;
+        visited.add(current);
+        const node = nodes.find(n => n.id === current);
+        if (!node) continue;
+        order.push(node);
+        // Follow each outgoing edge in connection insertion order
+        connections.forEach(conn => {
+          if (conn.from === current && !visited.has(conn.to)) {
+            queue.push(conn.to);
+          }
+        });
+      }
+      return order;
+    }
+
     function calculate() {
       const startingNode = nodes.find(n => n.type === 'starting');
       if (!startingNode) {
@@ -1238,162 +1333,266 @@
 
       const startCapital = startingNode.fields.capital;
       const startAge = startingNode.fields.age;
-      let balance = startCapital;
 
-      // Collect connected nodes
-      const connectedNodes = getConnectedNodes(startingNode.id);
+      // Running simulation state
+      const sim = {
+        balance: startCapital,
+        currentAge: startAge,
+        yearsElapsed: 0,
+        // Active monthly + social config (the most recently visited of each)
+        monthlyNode: null,
+        socialNode: null,
+        // Totals across the whole chain
+        totalOneTimeIncome: 0,
+        totalOneTimeExpenses: 0,
+        totalMonthlyContributions: 0,
+        totalTaxes: 0,
+        totalSocialSecurity: 0,
+        totalGrowth: 0,
+        yearlyData: [{
+          age: startAge,
+          balance: startCapital,
+          income: 0,
+          expenses: 0,
+          growth: 0,
+          taxes: 0,
+          social: 0
+        }],
+        failedAtAge: null,
+        // Per-segment counters reset whenever a Summary node is visited
+        segmentOneTimeIncome: 0,
+        segmentOneTimeExpenses: 0,
+        startingBalance: startCapital
+      };
 
-      let monthlyNode = null;
-      let socialNode = null;
-      const oneTimeExpenses = [];
-      const oneTimeIncomes = [];
-
-      // Starting node is also included in iteration to handle case where you connect just starting
-      [startingNode, ...connectedNodes].forEach(node => {
-        if (node.type === 'expense') {
-          oneTimeExpenses.push({
-            age: node.fields.age,
-            amount: node.fields.amount,
-            description: node.fields.description
-          });
-        } else if (node.type === 'income') {
-          oneTimeIncomes.push({
-            age: node.fields.age,
-            amount: node.fields.amount,
-            description: node.fields.description
-          });
-        } else if (node.type === 'monthly') {
-          monthlyNode = node;
-        } else if (node.type === 'social') {
-          socialNode = node;
+      // Helper: simulate `years` years of monthly compounding using the
+      // currently-active monthly + social config. Mutates sim.
+      function simulateMonthlyYears(years) {
+        const m = sim.monthlyNode;
+        if (!m || years <= 0) {
+          // If no monthly node but a social node is active, still pay SS as lump
+          if (sim.socialNode && years > 0) {
+            for (let y = 0; y < years; y++) {
+              sim.currentAge += 1;
+              sim.yearsElapsed += 1;
+              let yearSocial = 0;
+              if (sim.currentAge >= sim.socialNode.fields.startAge) {
+                const yearsSinceStart = sim.currentAge - sim.socialNode.fields.startAge;
+                const cola = (sim.socialNode.fields.cola || 0) / 100;
+                const monthlySS = sim.socialNode.fields.monthlyAmount * Math.pow(1 + cola, yearsSinceStart);
+                yearSocial = monthlySS * 12;
+                sim.balance += yearSocial;
+                sim.totalSocialSecurity += yearSocial;
+              }
+              if (sim.balance < 0 && sim.failedAtAge === null) sim.failedAtAge = sim.currentAge;
+              sim.yearlyData.push({
+                age: sim.currentAge,
+                balance: sim.balance,
+                income: yearSocial,
+                expenses: 0,
+                growth: 0,
+                taxes: 0,
+                social: yearSocial
+              });
+            }
+          } else {
+            // Just advance the clock with no economic activity
+            sim.currentAge += years;
+            sim.yearsElapsed += years;
+          }
+          return;
         }
-      });
 
-      let totalOneTimeIncome = 0;
-      let totalOneTimeExpenses = 0;
-      let totalMonthlyContributions = 0;
-      let totalTaxes = 0;
-      let totalSocialSecurity = 0;
-      let totalGrowth = 0;
+        const annualReturn = m.fields.annualReturn / 100;
+        const monthlyReturn = annualReturn / 12;
+        const inflationRate = m.fields.inflation / 100;
+        const taxRate = (m.fields.taxRate || 0) / 100;
+        const monthlyIncomeRaw = m.fields.monthlyIncome;
+        const monthlyExpensesRaw = m.fields.monthlyExpenses;
 
-      // Determine projection length
-      let maxYears = monthlyNode ? monthlyNode.fields.years : 35;
-      oneTimeExpenses.forEach(e => {
-        if (e.age > startAge) maxYears = Math.max(maxYears, e.age - startAge + 1);
-      });
-      oneTimeIncomes.forEach(i => {
-        if (i.age > startAge) maxYears = Math.max(maxYears, i.age - startAge + 1);
-      });
-      if (socialNode) {
-        maxYears = Math.max(maxYears, (socialNode.fields.startAge - startAge) + 30);
-      }
-      maxYears = Math.min(maxYears, 80); // cap
+        // Inflation factor is anchored to total years elapsed since simulation start
+        for (let y = 0; y < years; y++) {
+          sim.currentAge += 1;
+          sim.yearsElapsed += 1;
+          const inflationFactor = Math.pow(1 + inflationRate, sim.yearsElapsed);
+          const inflatedExpenses = monthlyExpensesRaw * inflationFactor;
+          const afterTaxIncome = monthlyIncomeRaw * (1 - taxRate);
+          const yearTaxes = monthlyIncomeRaw * taxRate * 12;
+          sim.totalTaxes += yearTaxes;
 
-      const yearlyData = [];
-      let failedAtAge = null;
-      let trueBalance = balance; // track without flooring at 0
-
-      for (let year = 0; year <= maxYears; year++) {
-        const currentAge = startAge + year;
-        let yearIncome = 0;
-        let yearExpenses = 0;
-        let yearGrowth = 0;
-        let yearTaxes = 0;
-        let yearSocial = 0;
-
-        // Apply one-time expenses & incomes at start of year
-        oneTimeExpenses.forEach(exp => {
-          if (exp.age === currentAge) {
-            trueBalance -= exp.amount;
-            yearExpenses += exp.amount;
-            totalOneTimeExpenses += exp.amount;
-          }
-        });
-        oneTimeIncomes.forEach(inc => {
-          if (inc.age === currentAge) {
-            trueBalance += inc.amount;
-            yearIncome += inc.amount;
-            totalOneTimeIncome += inc.amount;
-          }
-        });
-
-        // Monthly compounding for this year (if year > 0 — year 0 is the starting state)
-        if (monthlyNode && year > 0) {
-          const annualReturn = monthlyNode.fields.annualReturn / 100;
-          const monthlyReturn = annualReturn / 12;
-          const inflationRate = monthlyNode.fields.inflation / 100;
-          const taxRate = (monthlyNode.fields.taxRate || 0) / 100;
-
-          // Inflate expenses by year
-          const inflationFactor = Math.pow(1 + inflationRate, year);
-          const inflatedExpenses = monthlyNode.fields.monthlyExpenses * inflationFactor;
-
-          // After-tax monthly income
-          const afterTaxIncome = monthlyNode.fields.monthlyIncome * (1 - taxRate);
-          yearTaxes = monthlyNode.fields.monthlyIncome * taxRate * 12;
-          totalTaxes += yearTaxes;
-
-          // Social Security
           let monthlySS = 0;
-          if (socialNode && currentAge >= socialNode.fields.startAge) {
-            const yearsSinceStart = currentAge - socialNode.fields.startAge;
-            const cola = (socialNode.fields.cola || 0) / 100;
-            monthlySS = socialNode.fields.monthlyAmount * Math.pow(1 + cola, yearsSinceStart);
+          let yearSocial = 0;
+          if (sim.socialNode && sim.currentAge >= sim.socialNode.fields.startAge) {
+            const yearsSinceStart = sim.currentAge - sim.socialNode.fields.startAge;
+            const cola = (sim.socialNode.fields.cola || 0) / 100;
+            monthlySS = sim.socialNode.fields.monthlyAmount * Math.pow(1 + cola, yearsSinceStart);
             yearSocial = monthlySS * 12;
-            totalSocialSecurity += yearSocial;
+            sim.totalSocialSecurity += yearSocial;
           }
 
+          let yearIncome = 0;
+          let yearExpenses = 0;
+          let yearGrowth = 0;
           for (let month = 0; month < 12; month++) {
-            const beforeGrowth = trueBalance;
-            trueBalance = trueBalance * (1 + monthlyReturn);
-            yearGrowth += trueBalance - beforeGrowth;
-            trueBalance += afterTaxIncome + monthlySS - inflatedExpenses;
+            const before = sim.balance;
+            sim.balance = sim.balance * (1 + monthlyReturn);
+            yearGrowth += sim.balance - before;
+            sim.balance += afterTaxIncome + monthlySS - inflatedExpenses;
             yearIncome += afterTaxIncome + monthlySS;
             yearExpenses += inflatedExpenses;
           }
-          totalGrowth += yearGrowth;
-          totalMonthlyContributions += afterTaxIncome * 12;
-        } else if (socialNode && year > 0 && currentAge >= socialNode.fields.startAge) {
-          // Social security without monthly node: 12 lump
-          const yearsSinceStart = currentAge - socialNode.fields.startAge;
-          const cola = (socialNode.fields.cola || 0) / 100;
-          const monthlySS = socialNode.fields.monthlyAmount * Math.pow(1 + cola, yearsSinceStart);
-          yearSocial = monthlySS * 12;
-          trueBalance += yearSocial;
-          totalSocialSecurity += yearSocial;
-        }
+          sim.totalGrowth += yearGrowth;
+          sim.totalMonthlyContributions += afterTaxIncome * 12;
 
-        // Detect failure
-        if (trueBalance < 0 && failedAtAge === null) {
-          failedAtAge = currentAge;
-        }
+          if (sim.balance < 0 && sim.failedAtAge === null) sim.failedAtAge = sim.currentAge;
 
-        yearlyData.push({
-          age: currentAge,
-          balance: trueBalance,
-          income: yearIncome,
-          expenses: yearExpenses,
-          growth: yearGrowth,
-          taxes: yearTaxes,
-          social: yearSocial
-        });
+          sim.yearlyData.push({
+            age: sim.currentAge,
+            balance: sim.balance,
+            income: yearIncome,
+            expenses: yearExpenses,
+            growth: yearGrowth,
+            taxes: yearTaxes,
+            social: yearSocial
+          });
+        }
       }
+
+      // Snapshots written into summary nodes
+      const summarySnapshots = {};
+
+      const chain = getOrderedChain(startingNode.id);
+      chain.forEach(node => {
+        if (node.type === 'starting') {
+          // Already accounted for as the initial state
+          return;
+        } else if (node.type === 'expense') {
+          sim.balance -= node.fields.amount;
+          sim.totalOneTimeExpenses += node.fields.amount;
+          sim.segmentOneTimeExpenses += node.fields.amount;
+          if (sim.balance < 0 && sim.failedAtAge === null) sim.failedAtAge = sim.currentAge;
+          // Tag this onto the last yearly data row
+          const last = sim.yearlyData[sim.yearlyData.length - 1];
+          last.expenses += node.fields.amount;
+          last.balance = sim.balance;
+        } else if (node.type === 'income') {
+          sim.balance += node.fields.amount;
+          sim.totalOneTimeIncome += node.fields.amount;
+          sim.segmentOneTimeIncome += node.fields.amount;
+          const last = sim.yearlyData[sim.yearlyData.length - 1];
+          last.income += node.fields.amount;
+          last.balance = sim.balance;
+        } else if (node.type === 'monthly') {
+          sim.monthlyNode = node;
+          const years = Math.max(0, Math.min(80, parseFloat(node.fields.years) || 0));
+          simulateMonthlyYears(years);
+        } else if (node.type === 'social') {
+          sim.socialNode = node;
+        } else if (node.type === 'summary') {
+          // Snapshot current state
+          let monthlyCashFlow = null;
+          if (sim.monthlyNode) {
+            const taxRate = (sim.monthlyNode.fields.taxRate || 0) / 100;
+            const afterTaxIncome = sim.monthlyNode.fields.monthlyIncome * (1 - taxRate);
+            monthlyCashFlow = afterTaxIncome - sim.monthlyNode.fields.monthlyExpenses;
+          }
+          summarySnapshots[node.id] = {
+            currentAge: sim.currentAge,
+            currentCapital: sim.balance,
+            netChange: sim.balance - sim.startingBalance,
+            yearsElapsed: sim.yearsElapsed,
+            totalIncomes: sim.totalOneTimeIncome,
+            totalExpenses: sim.totalOneTimeExpenses,
+            monthlyCashFlow,
+            hasMonthly: !!sim.monthlyNode
+          };
+        }
+      });
+
+      // Render summary nodes
+      Object.entries(summarySnapshots).forEach(([id, snap]) => {
+        renderSummaryNode(id, snap);
+      });
+      // Any summary node NOT visited in the chain should show "not connected"
+      nodes.forEach(n => {
+        if (n.type === 'summary' && !summarySnapshots[n.id]) {
+          const body = document.getElementById('summary-body-' + n.id);
+          if (body) {
+            body.style.opacity = '1';
+            body.innerHTML = `<div class="summary-empty">Not connected to the flow</div>`;
+          }
+        }
+      });
+      // Clear stale opacity for the ones we did update
+      Object.keys(summarySnapshots).forEach(id => {
+        const body = document.getElementById('summary-body-' + id);
+        if (body) body.style.opacity = '1';
+      });
 
       displayResults({
         startingBalance: startCapital,
-        finalBalance: trueBalance,
-        totalOneTimeIncome,
-        totalOneTimeExpenses,
-        totalMonthlyContributions,
-        totalTaxes,
-        totalSocialSecurity,
-        totalGrowth,
-        yearlyData,
-        failedAtAge,
+        finalBalance: sim.balance,
+        totalOneTimeIncome: sim.totalOneTimeIncome,
+        totalOneTimeExpenses: sim.totalOneTimeExpenses,
+        totalMonthlyContributions: sim.totalMonthlyContributions,
+        totalTaxes: sim.totalTaxes,
+        totalSocialSecurity: sim.totalSocialSecurity,
+        totalGrowth: sim.totalGrowth,
+        yearlyData: sim.yearlyData,
+        failedAtAge: sim.failedAtAge,
         startAge,
-        monthlyNode,
-        socialNode
+        monthlyNode: sim.monthlyNode,
+        socialNode: sim.socialNode
       });
+    }
+
+    function renderSummaryNode(nodeId, snap) {
+      const body = document.getElementById('summary-body-' + nodeId);
+      if (!body) return;
+      const fmt = (n) => {
+        const sign = n < 0 ? '-' : '';
+        return sign + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
+      };
+      const netClass = snap.netChange > 0 ? 'positive' : (snap.netChange < 0 ? 'negative' : 'neutral');
+      const cashFlowRow = snap.hasMonthly
+        ? `<div class="summary-row">
+             <span class="summary-label">Monthly Cash Flow</span>
+             <span class="summary-value ${snap.monthlyCashFlow > 0 ? 'positive' : (snap.monthlyCashFlow < 0 ? 'negative' : '')}">${fmt(snap.monthlyCashFlow)}</span>
+           </div>`
+        : `<div class="summary-row">
+             <span class="summary-label">Monthly Cash Flow</span>
+             <span class="summary-value" style="color: var(--text-secondary); font-style: italic;">no monthly node yet</span>
+           </div>`;
+      body.innerHTML = `
+        <div class="summary-row">
+          <span class="summary-label">Current Age</span>
+          <span class="summary-value neutral">${snap.currentAge}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Current Capital</span>
+          <span class="summary-value ${snap.currentCapital >= 0 ? 'positive' : 'negative'}">${fmt(snap.currentCapital)}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Net Change</span>
+          <span class="summary-value ${netClass}">${snap.netChange >= 0 ? '+' : ''}${fmt(snap.netChange)}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Years Elapsed</span>
+          <span class="summary-value neutral">${snap.yearsElapsed}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Total Incomes</span>
+          <span class="summary-value positive">${fmt(snap.totalIncomes)}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Total Expenses</span>
+          <span class="summary-value negative">${fmt(snap.totalExpenses)}</span>
+        </div>
+        ${cashFlowRow}
+        <div class="summary-recalc-hint">Updates on Calculate</div>
+      `;
+      // Connections need a redraw because the node may have grown taller
+      requestAnimationFrame(() => updateConnections());
     }
 
     function getConnectedNodes(startNodeId) {
