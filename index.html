@@ -1040,6 +1040,9 @@
     let dragAnchorMouse = { x: 0, y: 0 };
     let marqueeStart = null;         // {x, y} in canvas coords
     let marqueeEl = null;            // visible marquee <div>
+    // Where the user last clicked on empty canvas background (in canvas coords).
+    // Used as the drop point when "+ Add ..." is clicked with no node selected.
+    let lastCanvasClick = null;
     let tempConnection = null;
     let panOffset = { x: 0, y: 0 };
     let zoom = 1;
@@ -1373,12 +1376,33 @@
     function addNode(type, x = null, y = null) {
       const config = nodeConfigs[type];
       const id = 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-      
-      if (x === null) {
-        // Place new node based on canvas viewport center
-        const containerRect = canvasContainer.getBoundingClientRect();
-        x = (containerRect.width / 2 - panOffset.x) / zoom - 120 + (nodes.length % 3) * 20;
-        y = (containerRect.height / 2 - panOffset.y) / zoom - 100 + (nodes.length % 3) * 20;
+
+      // Decide where the new node lands. Precedence:
+      //   1. explicit x/y passed in (used by paste/duplicate)
+      //   2. currently-selected node with an output port -> just to its right,
+      //      and we’ll auto-connect it below
+      //   3. last empty-canvas click location
+      //   4. viewport-center fallback
+      let autoConnectFromId = null;
+      if (x === null || y === null) {
+        const selId = selectedNode; // most-recent single selection
+        const selNode = selId ? nodes.find(n => n.id === selId) : null;
+        const selCfg = selNode ? nodeConfigs[selNode.type] : null;
+        if (selNode && selCfg && selCfg.hasOutput && config.hasInput) {
+          const selEl = document.getElementById(selNode.id);
+          const selW = selEl ? selEl.offsetWidth : 240;
+          const selH = selEl ? selEl.offsetHeight : 120;
+          x = selNode.x + selW + 60;
+          y = selNode.y + Math.round((selH - 120) / 2);
+          autoConnectFromId = selNode.id;
+        } else if (lastCanvasClick) {
+          x = lastCanvasClick.x;
+          y = lastCanvasClick.y;
+        } else {
+          const containerRect = canvasContainer.getBoundingClientRect();
+          x = (containerRect.width / 2 - panOffset.x) / zoom - 120 + (nodes.length % 3) * 20;
+          y = (containerRect.height / 2 - panOffset.y) / zoom - 100 + (nodes.length % 3) * 20;
+        }
       }
 
       const nodeData = {
@@ -1393,7 +1417,6 @@
         nodeData.fields[f.name] = f.value;
       });
 
-      // Switch nodes carry extra state: alternative-input count + active index.
       if (type === 'switch') {
         nodeData.altCount = config.defaultAltCount;
         nodeData.activeIndex = config.defaultActiveIndex;
@@ -1401,6 +1424,25 @@
 
       nodes.push(nodeData);
       renderNode(nodeData);
+
+      // Auto-connect from the previously-selected node's output. If that node
+      // already had a downstream main connection, splice this new node into
+      // it: A -> B  becomes  A -> New -> B.
+      if (autoConnectFromId) {
+        const existing = connections.find(c =>
+          c.from === autoConnectFromId && !c.toPort);
+        if (existing) {
+          const oldTo = existing.to;
+          connections = connections.filter(c => c !== existing);
+          connections.push({ from: autoConnectFromId, to: id });
+          connections.push({ from: id, to: oldTo });
+        } else {
+          connections.push({ from: autoConnectFromId, to: id });
+        }
+        // Newly-added node becomes the selection so subsequent "+ Add" chains.
+        selectNode(id);
+      }
+
       requestAnimationFrame(() => updateConnections());
       scheduleCalculate();
       saveState();
@@ -2250,6 +2292,13 @@
 
       canvasContainer.addEventListener('mousedown', (e) => {
         if (e.target === canvasContainer || e.target === canvas || e.target === canvasGrid || e.target === connectionsLayer) {
+          // Remember where the user clicked on empty canvas so that a
+          // subsequent "+ Add X" toolbar click can drop the node here.
+          const containerRect = canvasContainer.getBoundingClientRect();
+          lastCanvasClick = {
+            x: (e.clientX - panOffset.x - containerRect.left) / zoom,
+            y: (e.clientY - panOffset.y - containerRect.top) / zoom
+          };
           // Cmd/Ctrl-drag on empty canvas -> marquee selection
           if (e.metaKey || e.ctrlKey) {
             beginMarquee(e);
