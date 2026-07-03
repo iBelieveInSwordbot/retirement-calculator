@@ -1593,28 +1593,49 @@
         // selection with just this node.
         if (!selectedNodes.has(nodeData.id)) selectNode(nodeData.id);
 
-        // Option-drag duplicates the node(s) BEFORE starting the drag.
+        // Option-drag duplicates the selection BEFORE starting the drag, then
+        // drags ONLY the freshly-created copies (the originals stay put).
+        // duplicateSelectedNodes() sets the selection to the new copy ids, so
+        // we just re-target this drag session to whichever copy corresponds
+        // to the node the user clicked on.
+        let effectiveNode = nodeData;
         if (altOrOpt) {
+          const originalId = nodeData.id;
+          const originalPos = { x: nodeData.x, y: nodeData.y };
           duplicateSelectedNodes();
+          // duplicateSelectedNodes uses a fixed offset (+40,+40) from each
+          // source, so the copy of the clicked node is the one at that offset.
+          const copyId = [...selectedNodes].find(id => {
+            const c = nodes.find(nn => nn.id === id);
+            return c && c.x === originalPos.x + 40 && c.y === originalPos.y + 40;
+          });
+          if (copyId) {
+            const copyNode = nodes.find(nn => nn.id === copyId);
+            if (copyNode) effectiveNode = copyNode;
+          }
+          // Remove hover / dragging class from the ORIGINAL element so it
+          // doesn't visually shadow the drag.
+          const origEl = document.getElementById(originalId);
+          if (origEl) origEl.classList.remove('dragging');
         }
 
-        // Start dragging every currently-selected node.
+        // Start dragging the currently-selected nodes (which, after Option-drag,
+        // are just the copies).
         const containerRect = canvasContainer.getBoundingClientRect();
         const mouseCanvasX = (e.clientX - panOffset.x - containerRect.left) / zoom;
         const mouseCanvasY = (e.clientY - panOffset.y - containerRect.top) / zoom;
-        draggingNode = nodeData.id; // primary node (compat)
-        dragOffset = { x: mouseCanvasX - nodeData.x, y: mouseCanvasY - nodeData.y };
-        // Snapshot start positions for every selected node so we can move as a group.
+        draggingNode = effectiveNode.id;
+        dragOffset = { x: mouseCanvasX - effectiveNode.x, y: mouseCanvasY - effectiveNode.y };
         dragGroup = [...selectedNodes].map(id => {
           const n = nodes.find(nn => nn.id === id);
           return n ? { id, startX: n.x, startY: n.y } : null;
         }).filter(Boolean);
-        // Ensure the primary node is in the drag group too.
-        if (!dragGroup.some(g => g.id === nodeData.id)) {
-          dragGroup.push({ id: nodeData.id, startX: nodeData.x, startY: nodeData.y });
+        if (!dragGroup.some(g => g.id === effectiveNode.id)) {
+          dragGroup.push({ id: effectiveNode.id, startX: effectiveNode.x, startY: effectiveNode.y });
         }
         dragAnchorMouse = { x: mouseCanvasX, y: mouseCanvasY };
-        el.classList.add('dragging');
+        const dragEl = document.getElementById(effectiveNode.id);
+        if (dragEl) dragEl.classList.add('dragging');
         e.preventDefault();
       });
 
