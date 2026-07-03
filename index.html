@@ -25,6 +25,7 @@
       --accent-social: #f78166;
       --accent-summary: #f9c513;
       --accent-timeline: #56d4dd;
+      --accent-switch: #e879f9;
       --text-primary: #e6edf3;
       --text-secondary: #8b949e;
       --connection-line: #58a6ff;
@@ -100,15 +101,15 @@
     .btn-monthly { border-color: var(--accent-monthly); color: var(--accent-monthly); }
     .btn-social { border-color: var(--accent-social); color: var(--accent-social); }
     .btn-summary { border-color: var(--accent-summary); color: var(--accent-summary); }
+    .btn-switch { border-color: var(--accent-switch); color: var(--accent-switch); }
     .btn-project {
       background: var(--bg-node);
-      color: var(--text-primary);
-      border: 1px solid var(--border-default);
+      color: var(--accent-timeline);
+      border: 1px solid var(--accent-timeline);
     }
     .btn-project:hover {
-      border-color: var(--border-selected);
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      box-shadow: 0 4px 12px rgba(86, 212, 221, 0.25);
     }
 
     .btn-calculate {
@@ -213,6 +214,14 @@
     .connection:hover {
       stroke-width: 4;
       filter: drop-shadow(0 0 8px var(--connection-line));
+    }
+
+    .connection.connection-alt {
+      stroke: var(--accent-switch);
+      stroke-dasharray: 5 4;
+    }
+    .connection.connection-alt:hover {
+      filter: drop-shadow(0 0 8px var(--accent-switch));
     }
 
     .connection.temp {
@@ -353,6 +362,85 @@
     .node[data-type="summary"] {
       border-top: 4px solid var(--accent-summary);
       min-width: 380px;
+    }
+    .node[data-type="switch"] {
+      border-top: 4px solid var(--accent-switch);
+      min-width: 260px;
+    }
+    .node[data-type="switch"] .node-title { color: var(--accent-switch); }
+
+    /* Alt-input ports rendered along the TOP edge of a switch node. */
+    .port.alt {
+      background: var(--accent-switch);
+      border-color: var(--bg-canvas);
+      top: -6px;
+      transform: translateX(-50%);
+      /* left is set inline per port to space them evenly */
+    }
+    .port.alt.connected { background: var(--accent-switch); }
+    .switch-alt-label {
+      position: absolute;
+      top: -22px;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+      pointer-events: none;
+    }
+    .switch-alt-label.active { color: var(--accent-switch); font-weight: 700; }
+
+    .switch-slider {
+      display: flex;
+      gap: 4px;
+      margin: 10px 0 8px;
+    }
+    .switch-slider-btn {
+      flex: 1 1 auto;
+      background: transparent;
+      border: 1px solid var(--border-default);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      padding: 6px 4px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .switch-slider-btn:hover { border-color: var(--accent-switch); color: var(--accent-switch); }
+    .switch-slider-btn.active {
+      background: var(--accent-switch);
+      color: #241028;
+      border-color: var(--accent-switch);
+    }
+    .switch-add-btn {
+      background: transparent;
+      border: 1px dashed var(--border-default);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+    .switch-add-btn:hover { border-color: var(--accent-switch); color: var(--accent-switch); }
+
+    .switch-preview {
+      opacity: 0.55;
+      pointer-events: none; /* fields are display-only */
+    }
+    .switch-preview .field-input,
+    .switch-preview .field-label { color: var(--text-secondary); }
+    .switch-preview-empty {
+      padding: 12px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 11px;
+      border: 1px dashed var(--border-default);
+      border-radius: 6px;
+      margin-bottom: 8px;
     }
 
     .node-header {
@@ -824,6 +912,7 @@
     <button class="btn btn-node btn-monthly" onclick="addNode('monthly')">+ Monthly</button>
     <button class="btn btn-node btn-social" onclick="addNode('social')">+ Social Security</button>
     <button class="btn btn-node btn-summary" onclick="addNode('summary')">+ Summary</button>
+    <button class="btn btn-node btn-switch" onclick="addNode('switch')">+ Switch</button>
     <div class="toolbar-divider"></div>
     <button class="btn btn-calculate" onclick="calculate()">Calculate</button>
     <button class="btn btn-project" onclick="toggleProjectsPanel()">Projects</button>
@@ -1095,6 +1184,15 @@
         hasInput: true,
         hasOutput: false, // Summaries are pure observers -- no downstream effect.
         readOnly: true
+      },
+      switch: {
+        title: 'Switch',
+        fields: [], // dynamic; rendered based on the active alternative
+        hasInput: true,
+        hasOutput: true,
+        // Switch-specific: number of alt input slots + which one is active.
+        defaultAltCount: 2,
+        defaultActiveIndex: 0
       }
     };
 
@@ -1240,9 +1338,97 @@
         nodeData.fields[f.name] = f.value;
       });
 
+      // Switch nodes carry extra state: alternative-input count + active index.
+      if (type === 'switch') {
+        nodeData.altCount = config.defaultAltCount;
+        nodeData.activeIndex = config.defaultActiveIndex;
+      }
+
       nodes.push(nodeData);
       renderNode(nodeData);
       requestAnimationFrame(() => updateConnections());
+      scheduleCalculate();
+      saveState();
+    }
+
+    // Returns the field markup for a Switch node: a slider to pick the active
+    // alt, a plus button, and a grayed-out preview of the selected alt's fields.
+    function renderSwitchBody(nodeData) {
+      const altCount = nodeData.altCount || 2;
+      const activeIdx = nodeData.activeIndex || 0;
+
+      // Slider (segmented control).
+      let slider = '<div class="switch-slider">';
+      for (let i = 0; i < altCount; i++) {
+        const letter = String.fromCharCode(65 + i);
+        slider += `<button class="switch-slider-btn ${i === activeIdx ? 'active' : ''}"
+          onclick="setSwitchActive('${nodeData.id}', ${i})">${letter}</button>`;
+      }
+      slider += '</div>';
+
+      const addBtn = `<button class="switch-add-btn" onclick="addSwitchAlt('${nodeData.id}')">
+        + Add alternative
+      </button>`;
+
+      // Preview: find the node currently connected to the active alt port.
+      const altConn = connections.find(c => c.to === nodeData.id && c.toPort === ('alt-' + activeIdx));
+      let previewHTML;
+      if (!altConn) {
+        previewHTML = `<div class="switch-preview-empty">Nothing wired to input ${String.fromCharCode(65 + activeIdx)}. Connect a node to the top port.</div>`;
+      } else {
+        const source = nodes.find(n => n.id === altConn.from);
+        if (!source) {
+          previewHTML = `<div class="switch-preview-empty">Wired to a missing node.</div>`;
+        } else {
+          previewHTML = renderSwitchPreview(source);
+        }
+      }
+
+      return slider + addBtn + previewHTML;
+    }
+
+    // Renders a read-only, grayed-out version of `source`'s field values.
+    function renderSwitchPreview(source) {
+      const scfg = nodeConfigs[source.type];
+      if (!scfg) return '<div class="switch-preview-empty">Unknown node type</div>';
+      const rows = (scfg.fields || []).map(f => {
+        const val = source.fields[f.name];
+        const disp = f.currency ? formatCurrencyInput(val || 0) :
+                     (val === '' || val === null || val === undefined ? '—' : String(val));
+        return `
+          <div class="node-field">
+            <label class="field-label">${f.label}</label>
+            <input type="text" class="field-input" value="${disp}" disabled>
+          </div>
+        `;
+      }).join('');
+      const header = `<div class="field-label" style="margin-bottom:6px;color:var(--accent-switch)">▸ ${scfg.title.toUpperCase()}</div>`;
+      return `<div class="switch-preview">${header}${rows || '<div class="switch-preview-empty">This node has no editable fields.</div>'}</div>`;
+    }
+
+    // Called by the slider buttons.
+    function setSwitchActive(nodeId, idx) {
+      const n = nodes.find(nn => nn.id === nodeId);
+      if (!n || n.type !== 'switch') return;
+      n.activeIndex = idx;
+      // Re-render the node's body + labels.
+      const oldEl = document.getElementById(nodeId);
+      if (oldEl) oldEl.remove();
+      renderNode(n);
+      updateConnections();
+      scheduleCalculate();
+      saveState();
+    }
+
+    // Called by the + Add alternative button.
+    function addSwitchAlt(nodeId) {
+      const n = nodes.find(nn => nn.id === nodeId);
+      if (!n || n.type !== 'switch') return;
+      n.altCount = (n.altCount || 2) + 1;
+      const oldEl = document.getElementById(nodeId);
+      if (oldEl) oldEl.remove();
+      renderNode(n);
+      updateConnections();
       scheduleCalculate();
       saveState();
     }
@@ -1264,7 +1450,9 @@
       }
 
       let fieldsHTML = '';
-      if (config.readOnly) {
+      if (nodeData.type === 'switch') {
+        fieldsHTML = renderSwitchBody(nodeData);
+      } else if (config.readOnly) {
         fieldsHTML = `<div class="summary-body" id="summary-body-${nodeData.id}">
           <div class="summary-empty">Connect to a node to see the summary</div>
         </div>`;
@@ -1304,6 +1492,17 @@
       }
       if (config.hasOutput) {
         portsHTML += `<div class="port output" data-node="${nodeData.id}" data-port="output"></div>`;
+      }
+      // Switch nodes render extra alt-input ports along the TOP edge.
+      if (nodeData.type === 'switch') {
+        const altCount = nodeData.altCount || 2;
+        for (let i = 0; i < altCount; i++) {
+          // Position each alt port at an evenly-spaced percentage across the top.
+          const pct = ((i + 1) / (altCount + 1)) * 100;
+          const label = String.fromCharCode(65 + i); // A, B, C, ...
+          portsHTML += `<span class="switch-alt-label ${i === nodeData.activeIndex ? 'active' : ''}" style="left:${pct}%">${label}</span>`;
+          portsHTML += `<div class="port alt" style="left:${pct}%" data-node="${nodeData.id}" data-port="alt-${i}"></div>`;
+        }
       }
 
       const canDelete = nodeData.type !== 'starting' || nodes.filter(n => n.type === 'starting').length > 1;
@@ -1683,7 +1882,8 @@
     function markSummariesStale() { scheduleCalculate(); }
 
     // ============ CONNECTIONS ============
-    // Get port position in CANVAS (unscaled) coordinates
+    // Get port position in CANVAS (unscaled) coordinates.
+    // portType: 'input' | 'output' | 'alt-N' (where N is a 0-based index on the top edge of a switch node).
     function getPortPosition(nodeId, portType) {
       const node = nodes.find(n => n.id === nodeId);
       if (!node) return null;
@@ -1691,6 +1891,12 @@
       if (!el) return null;
       const width = el.offsetWidth;
       const height = el.offsetHeight;
+      if (portType && portType.startsWith('alt-')) {
+        const idx = parseInt(portType.slice(4), 10);
+        const altCount = node.altCount || 2;
+        const pct = ((idx + 1) / (altCount + 1));
+        return { x: node.x + width * pct, y: node.y };
+      }
       const cx = portType === 'output' ? node.x + width : node.x;
       const cy = node.y + height / 2;
       return { x: cx, y: cy };
@@ -1705,9 +1911,11 @@
       const mouseCanvasX = (e.clientX - panOffset.x - containerRect.left) / zoom;
       const mouseCanvasY = (e.clientY - panOffset.y - containerRect.top) / zoom;
 
+      const isAlt = portType.startsWith('alt-');
       tempConnection = {
         from: portType === 'output' ? nodeId : null,
-        to: portType === 'input' ? nodeId : null,
+        to: (portType === 'input' || isAlt) ? nodeId : null,
+        toPort: isAlt ? portType : null,
         portType,
         startX: start.x,
         startY: start.y,
@@ -1757,18 +1965,30 @@
       if (target && target.classList && target.classList.contains('port')) {
         const targetNodeId = target.dataset.node;
         const targetPortType = target.dataset.port;
+        const targetIsAlt = targetPortType && targetPortType.startsWith('alt-');
 
-        if (tempConnection.from && targetPortType === 'input') {
+        if (tempConnection.from && (targetPortType === 'input' || targetIsAlt)) {
           if (tempConnection.from !== targetNodeId) {
-            connections = connections.filter(c => c.to !== targetNodeId);
-            connections.push({ from: tempConnection.from, to: targetNodeId });
+            // Only one connection per (to, toPort) slot.
+            const slotKey = targetIsAlt ? targetPortType : undefined;
+            connections = connections.filter(c =>
+              !(c.to === targetNodeId && (c.toPort || undefined) === slotKey)
+            );
+            const conn = { from: tempConnection.from, to: targetNodeId };
+            if (slotKey) conn.toPort = slotKey;
+            connections.push(conn);
             markSummariesStale();
             saveState();
           }
         } else if (tempConnection.to && targetPortType === 'output') {
           if (tempConnection.to !== targetNodeId) {
-            connections = connections.filter(c => c.to !== tempConnection.to);
-            connections.push({ from: targetNodeId, to: tempConnection.to });
+            const slotKey = tempConnection.toPort || undefined;
+            connections = connections.filter(c =>
+              !(c.to === tempConnection.to && (c.toPort || undefined) === slotKey)
+            );
+            const conn = { from: targetNodeId, to: tempConnection.to };
+            if (slotKey) conn.toPort = slotKey;
+            connections.push(conn);
             markSummariesStale();
             saveState();
           }
@@ -1777,6 +1997,14 @@
 
       tempConnection = null;
       updateConnections();
+    }
+
+    // Bezier ending at the TOP edge of a node (for alt-N inputs on Switch).
+    function getBezierPathTop(x1, y1, x2, y2) {
+      const dy = Math.abs(y2 - y1);
+      const cp = Math.min(Math.max(dy * 0.6, 60), 200);
+      // Control tangent leaves the source horizontally-ish, enters the target vertically from above.
+      return `M ${x1} ${y1} C ${x1 + cp} ${y1}, ${x2} ${y2 - cp}, ${x2} ${y2}`;
     }
 
     function getBezierPath(x1, y1, x2, y2) {
@@ -1796,14 +2024,20 @@
 
       connections.forEach((conn, idx) => {
         const from = getPortPosition(conn.from, 'output');
-        const to = getPortPosition(conn.to, 'input');
+        const toPortType = conn.toPort || 'input';
+        const to = getPortPosition(conn.to, toPortType);
         if (!from || !to) return;
 
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('class', 'connection');
-        path.setAttribute('d', getBezierPath(from.x, from.y, to.x, to.y));
+        // Alt connections get a distinct look.
+        path.setAttribute('class', 'connection' + (conn.toPort ? ' connection-alt' : ''));
+        // Route: for alt-N inputs, come in from the TOP of the target rather
+        // than the LEFT, so we still use bezier but adjust control tangents.
+        path.setAttribute('d', conn.toPort
+          ? getBezierPathTop(from.x, from.y, to.x, to.y)
+          : getBezierPath(from.x, from.y, to.x, to.y));
         path.dataset.connIdx = idx;
-        
+
         path.addEventListener('click', (e) => {
           if (e.altKey || confirm('Delete this connection?')) {
             connections.splice(idx, 1);
@@ -1823,7 +2057,10 @@
           if (p) p.classList.add('connected');
         }
         if (toEl) {
-          const p = toEl.querySelector('.port.input');
+          const sel = conn.toPort
+            ? `.port[data-port="${conn.toPort}"]`
+            : '.port.input';
+          const p = toEl.querySelector(sel);
           if (p) p.classList.add('connected');
         }
       });
@@ -1946,20 +2183,26 @@
     function getOrderedChain(startNodeId) {
       const nodeById = new Map(nodes.map(n => [n.id, n]));
 
-      // Follow only edges into non-summary targets. Summaries are excluded
-      // entirely so deleting/adding a Summary NEVER changes the simulation.
+      // Only "main" edges (targeting a node's default input, i.e. no toPort)
+      // propagate the simulation. Alt-input edges into Switch nodes are
+      // "selector" edges -- they tell the Switch which node to proxy, but
+      // don't push their source into the mainstream flow.
+      const isMainEdge = c => !c.toPort;
       const isSummary = id => (nodeById.get(id) || {}).type === 'summary';
+
       const reachable = new Set();
       (function walk(id) {
         if (reachable.has(id) || isSummary(id)) return;
         reachable.add(id);
-        connections.forEach(c => { if (c.from === id && !isSummary(c.to)) walk(c.to); });
+        connections.forEach(c => {
+          if (c.from === id && isMainEdge(c) && !isSummary(c.to)) walk(c.to);
+        });
       })(startNodeId);
 
       const inDeg = new Map();
       reachable.forEach(id => inDeg.set(id, 0));
       connections.forEach(c => {
-        if (reachable.has(c.from) && reachable.has(c.to)) {
+        if (isMainEdge(c) && reachable.has(c.from) && reachable.has(c.to)) {
           inDeg.set(c.to, (inDeg.get(c.to) || 0) + 1);
         }
       });
@@ -1974,7 +2217,7 @@
         if (!node) continue;
         order.push(node);
         connections.forEach(c => {
-          if (c.from === current && reachable.has(c.to)) {
+          if (c.from === current && isMainEdge(c) && reachable.has(c.to)) {
             const nd = (inDeg.get(c.to) || 0) - 1;
             inDeg.set(c.to, nd);
             if (nd === 0) ready.push(c.to);
@@ -2165,31 +2408,50 @@
       // Snapshot the starting state before any nodes process.
       nodeSnapshots[startingNode.id] = takeSnapshot();
 
+      // Apply one node's effect to the simulation. Switch nodes proxy their
+      // currently-active alt-input source: they behave as if that source's
+      // type + fields were the node here in the chain.
+      function applyNode(node) {
+        let effective = node;
+        if (node.type === 'switch') {
+          const altKey = 'alt-' + (node.activeIndex || 0);
+          const altConn = connections.find(c => c.to === node.id && c.toPort === altKey);
+          if (altConn) {
+            const src = nodes.find(n => n.id === altConn.from);
+            if (src) effective = src;
+          } else {
+            // No alt wired -> switch is a pass-through, do nothing.
+            return;
+          }
+        }
+        if (effective.type === 'expense') {
+          sim.balance -= effective.fields.amount;
+          sim.totalOneTimeExpenses += effective.fields.amount;
+          sim.segmentOneTimeExpenses += effective.fields.amount;
+          if (sim.balance < 0 && sim.failedAtAge === null) sim.failedAtAge = sim.currentAge;
+          const last = sim.yearlyData[sim.yearlyData.length - 1];
+          last.expenses += effective.fields.amount;
+          last.balance = sim.balance;
+        } else if (effective.type === 'income') {
+          sim.balance += effective.fields.amount;
+          sim.totalOneTimeIncome += effective.fields.amount;
+          sim.segmentOneTimeIncome += effective.fields.amount;
+          const last = sim.yearlyData[sim.yearlyData.length - 1];
+          last.income += effective.fields.amount;
+          last.balance = sim.balance;
+        } else if (effective.type === 'monthly') {
+          sim.monthlyNode = effective;
+          const years = Math.max(0, Math.min(80, parseFloat(effective.fields.years) || 0));
+          simulateMonthlyYears(years);
+        } else if (effective.type === 'social') {
+          sim.socialNode = effective;
+        }
+      }
+
       const chain = getOrderedChain(startingNode.id);
       chain.forEach(node => {
         if (node.type === 'starting') return; // already snapshotted
-        if (node.type === 'expense') {
-          sim.balance -= node.fields.amount;
-          sim.totalOneTimeExpenses += node.fields.amount;
-          sim.segmentOneTimeExpenses += node.fields.amount;
-          if (sim.balance < 0 && sim.failedAtAge === null) sim.failedAtAge = sim.currentAge;
-          const last = sim.yearlyData[sim.yearlyData.length - 1];
-          last.expenses += node.fields.amount;
-          last.balance = sim.balance;
-        } else if (node.type === 'income') {
-          sim.balance += node.fields.amount;
-          sim.totalOneTimeIncome += node.fields.amount;
-          sim.segmentOneTimeIncome += node.fields.amount;
-          const last = sim.yearlyData[sim.yearlyData.length - 1];
-          last.income += node.fields.amount;
-          last.balance = sim.balance;
-        } else if (node.type === 'monthly') {
-          sim.monthlyNode = node;
-          const years = Math.max(0, Math.min(80, parseFloat(node.fields.years) || 0));
-          simulateMonthlyYears(years);
-        } else if (node.type === 'social') {
-          sim.socialNode = node;
-        }
+        applyNode(node);
         // Snapshot post-processing so any Summary hanging off this node can
         // render the state right after this node applied its effect.
         nodeSnapshots[node.id] = takeSnapshot();
