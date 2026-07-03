@@ -24,6 +24,7 @@
       --accent-monthly: #a371f7;
       --accent-social: #f78166;
       --accent-summary: #f9c513;
+      --accent-dataviz: #56d4dd;
       --text-primary: #e6edf3;
       --text-secondary: #8b949e;
       --connection-line: #58a6ff;
@@ -99,6 +100,8 @@
     .btn-monthly { border-color: var(--accent-monthly); color: var(--accent-monthly); }
     .btn-social { border-color: var(--accent-social); color: var(--accent-social); }
     .btn-summary { border-color: var(--accent-summary); color: var(--accent-summary); }
+    .btn-dataviz { border-color: var(--accent-dataviz); color: var(--accent-dataviz); }
+    .btn-project { border-color: var(--text-secondary); color: var(--text-primary); }
 
     .btn-calculate {
       background: var(--accent-starting);
@@ -244,6 +247,92 @@
       opacity: 0.95;
     }
 
+    .marquee {
+      position: absolute;
+      border: 1.5px dashed var(--border-selected);
+      background: rgba(88, 166, 255, 0.08);
+      pointer-events: none;
+      z-index: 400;
+      border-radius: 4px;
+    }
+
+    /* ============ Projects Panel ============ */
+    .projects-panel {
+      position: fixed;
+      top: 72px;
+      left: 16px;
+      width: 320px;
+      max-height: calc(100vh - 88px);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 600;
+      display: none;
+      flex-direction: column;
+      padding: 12px;
+      gap: 10px;
+    }
+    .projects-panel.open { display: flex; }
+    .projects-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .projects-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .projects-saveform {
+      display: flex;
+      gap: 8px;
+    }
+    .projects-saveform .field-input {
+      flex: 1 1 auto;
+    }
+    .projects-saveform .btn { padding: 6px 10px; font-size: 11px; }
+    .projects-import { display: flex; }
+    .import-label {
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .projects-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+    .projects-empty {
+      color: var(--text-secondary);
+      font-size: 11px;
+      padding: 12px;
+      text-align: center;
+    }
+    .project-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      background: var(--bg-node);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+    }
+    .project-info { min-width: 0; overflow: hidden; }
+    .project-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+    .project-meta { font-size: 9px; color: var(--text-secondary); margin-top: 2px; }
+    .project-actions { display: flex; gap: 4px; }
+    .btn-tiny {
+      background: transparent;
+      border: 1px solid var(--border-default);
+      color: var(--text-primary);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 10px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-tiny:hover { border-color: var(--border-selected); }
+    .btn-tiny.danger { color: var(--accent-expense); border-color: var(--accent-expense); }
+
     .node[data-type="starting"] { border-top: 4px solid var(--accent-starting); }
     .node[data-type="expense"] { border-top: 4px solid var(--accent-expense); }
     .node[data-type="income"] { border-top: 4px solid var(--accent-income); }
@@ -253,6 +342,40 @@
       border-top: 4px solid var(--accent-summary);
       min-width: 380px;
     }
+    .node[data-type="dataviz"] {
+      border-top: 4px solid var(--accent-dataviz);
+      min-width: 360px;
+      min-height: 260px;
+      display: flex;
+      flex-direction: column;
+      resize: both;
+      overflow: hidden;
+    }
+    .node[data-type="dataviz"] .node-header { flex: 0 0 auto; }
+    .node[data-type="dataviz"] .dataviz-body {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .node[data-type="dataviz"] .dataviz-chart {
+      flex: 1 1 auto;
+      min-height: 140px;
+      display: flex;
+      align-items: stretch;
+    }
+    .node[data-type="dataviz"] .dataviz-chart svg {
+      width: 100%;
+      height: 100%;
+    }
+    .node[data-type="dataviz"] .dataviz-table-wrap {
+      max-height: 200px;
+      overflow-y: auto;
+      border-top: 1px solid var(--border-default);
+      margin-top: 8px;
+      padding-top: 6px;
+    }
+    .node[data-type="dataviz"] .node-title { color: var(--accent-dataviz); }
 
     .node-header {
       display: flex;
@@ -277,6 +400,7 @@
     .node[data-type="monthly"] .node-title { color: var(--accent-monthly); }
     .node[data-type="social"] .node-title { color: var(--accent-social); }
     .node[data-type="summary"] .node-title { color: var(--accent-summary); }
+    .node[data-type="dataviz"] .node-title { color: var(--accent-dataviz); }
 
     /* Summary node read-only display */
     .summary-row {
@@ -318,6 +442,33 @@
       margin-top: 8px;
       opacity: 0.7;
     }
+
+    .summary-details {
+      margin-top: 10px;
+      border-top: 1px solid var(--border-default);
+      padding-top: 8px;
+    }
+    .summary-details[open] { padding-bottom: 4px; }
+    .summary-details-toggle {
+      cursor: pointer;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-secondary);
+      list-style: none;
+      padding: 4px 0;
+      user-select: none;
+    }
+    .summary-details-toggle::-webkit-details-marker { display: none; }
+    .summary-details-toggle::before {
+      content: '▶';
+      display: inline-block;
+      margin-right: 6px;
+      transition: transform 0.15s ease;
+      font-size: 8px;
+    }
+    .summary-details[open] > .summary-details-toggle::before { transform: rotate(90deg); }
+    .summary-details-body { padding-top: 6px; }
 
     .node-delete {
       width: 24px;
@@ -673,11 +824,31 @@
     <button class="btn btn-node btn-monthly" onclick="addNode('monthly')">+ Monthly</button>
     <button class="btn btn-node btn-social" onclick="addNode('social')">+ Social Security</button>
     <button class="btn btn-node btn-summary" onclick="addNode('summary')">+ Summary</button>
+    <button class="btn btn-node btn-dataviz" onclick="addNode('dataviz')">+ Data Viz</button>
     <div class="toolbar-divider"></div>
     <button class="btn btn-calculate" onclick="calculate()">Calculate</button>
+    <button class="btn btn-project" onclick="toggleProjectsPanel()">Projects</button>
     <button class="btn btn-share" onclick="shareUrl()">Share</button>
     <button class="btn btn-clear" onclick="clearAll()">Clear</button>
     <span class="save-indicator" id="saveIndicator">✓ Saved</span>
+  </div>
+
+  <div class="projects-panel" id="projectsPanel">
+    <div class="projects-header">
+      <div class="projects-title">📂 Projects</div>
+      <button class="btn-tiny" onclick="toggleProjectsPanel()">Close</button>
+    </div>
+    <div class="projects-saveform">
+      <input id="projectNameInput" class="field-input" type="text" placeholder="Project name">
+      <button class="btn btn-calculate" onclick="saveCurrentAsProject()">Save current</button>
+    </div>
+    <div class="projects-import">
+      <label class="btn-tiny import-label">
+        Import… <input type="file" accept="application/json,.json" style="display:none"
+          onchange="if(this.files[0]) { importProjectFromFile(this.files[0]); this.value=''; }">
+      </label>
+    </div>
+    <div class="projects-list" id="projectsList"></div>
   </div>
 
   <div class="canvas-container" id="canvasContainer">
@@ -688,7 +859,7 @@
   </div>
 
   <div class="hint">
-    💡 <kbd>scroll</kbd> zoom · <kbd>drag canvas</kbd> pan · <kbd>alt+click</kbd> delete connection · <kbd>del</kbd> delete node
+    💡 <kbd>scroll</kbd> zoom · <kbd>drag</kbd> pan · <kbd>⌘drag</kbd> marquee · <kbd>⌘click</kbd> multi-select · <kbd>⌥drag</kbd> duplicate · <kbd>⌘C/V/X/D</kbd> copy/paste/cut/dup · <kbd>del</kbd> delete
   </div>
 
   <div class="zoom-indicator" id="zoomIndicator">100%</div>
@@ -706,9 +877,18 @@
 
     let nodes = [];
     let connections = [];
-    let selectedNode = null;
+    // Multi-select: Set of selected node IDs. `selectedNode` kept as a compat
+    // shim for existing single-selection call sites (returns the most recent).
+    let selectedNodes = new Set();
+    let selectedNode = null; // deprecated alias; kept for shims below.
+    // Clipboard for cut/copy/paste of nodes.
+    let nodeClipboard = null;
     let draggingNode = null;
     let dragOffset = { x: 0, y: 0 };
+    let dragGroup = [];              // [{id, startX, startY}] for multi-node drag
+    let dragAnchorMouse = { x: 0, y: 0 };
+    let marqueeStart = null;         // {x, y} in canvas coords
+    let marqueeEl = null;            // visible marquee <div>
     let tempConnection = null;
     let panOffset = { x: 0, y: 0 };
     let zoom = 1;
@@ -716,6 +896,141 @@
     let panStart = { x: 0, y: 0 };
 
     const STORAGE_KEY = 'retirement-calc-state-v2';
+    const PROJECTS_KEY = 'retirement-calc-projects-v1';
+
+    // ============ PROJECTS ============
+    function getProjects() {
+      try {
+        const raw = localStorage.getItem(PROJECTS_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) { return {}; }
+    }
+
+    function setProjects(map) {
+      try { localStorage.setItem(PROJECTS_KEY, JSON.stringify(map)); } catch (e) { /* quota? */ }
+    }
+
+    function currentSnapshot() {
+      return {
+        nodes: nodes.map(n => ({ ...n, fields: { ...n.fields } })),
+        connections: connections.map(c => ({ ...c })),
+        panOffset: { ...panOffset },
+        zoom
+      };
+    }
+
+    function saveProject(name) {
+      if (!name || !name.trim()) return;
+      const map = getProjects();
+      map[name.trim()] = { savedAt: Date.now(), state: currentSnapshot() };
+      setProjects(map);
+      renderProjectsPanel();
+      showToast('💾 Saved “' + name + '”');
+    }
+
+    function loadProject(name) {
+      const map = getProjects();
+      const entry = map[name];
+      if (!entry) return;
+      const s = entry.state;
+      _suppressLiveRecalc = true;
+      try {
+        document.querySelectorAll('.node').forEach(n => n.remove());
+        nodes = s.nodes.map(n => ({ ...n, fields: { ...n.fields } }));
+        connections = s.connections.map(c => ({ ...c }));
+        if (s.panOffset) panOffset = { ...s.panOffset };
+        if (s.zoom) zoom = s.zoom;
+        renderAll();
+        applyTransform();
+      } finally { _suppressLiveRecalc = false; }
+      scheduleCalculate();
+      saveState();
+      showToast('📂 Loaded “' + name + '”');
+    }
+
+    function deleteProject(name) {
+      if (!confirm(`Delete project “${name}”?`)) return;
+      const map = getProjects();
+      delete map[name];
+      setProjects(map);
+      renderProjectsPanel();
+    }
+
+    function exportProject(name) {
+      const map = getProjects();
+      const entry = map[name] || { savedAt: Date.now(), state: currentSnapshot() };
+      const blob = new Blob([JSON.stringify({ project: name || 'current', ...entry }, null, 2)],
+        { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `retirement-calc-${(name || 'current').replace(/[^a-z0-9]+/gi, '_')}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    function importProjectFromFile(file) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          const name = parsed.project || file.name.replace(/\.json$/, '');
+          const map = getProjects();
+          map[name] = { savedAt: Date.now(), state: parsed.state };
+          setProjects(map);
+          renderProjectsPanel();
+          showToast('📥 Imported “' + name + '”');
+        } catch (err) {
+          alert('Could not read project file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function toggleProjectsPanel() {
+      const panel = document.getElementById('projectsPanel');
+      if (!panel) return;
+      const isOpen = panel.classList.toggle('open');
+      if (isOpen) renderProjectsPanel();
+    }
+
+    function renderProjectsPanel() {
+      const list = document.getElementById('projectsList');
+      if (!list) return;
+      const map = getProjects();
+      const names = Object.keys(map).sort((a, b) =>
+        (map[b].savedAt || 0) - (map[a].savedAt || 0));
+      if (!names.length) {
+        list.innerHTML = '<div class="projects-empty">No saved projects yet.</div>';
+        return;
+      }
+      list.innerHTML = names.map(name => {
+        const savedAt = new Date(map[name].savedAt || 0).toLocaleString();
+        const safe = name.replace(/'/g, "\\'");
+        return `
+          <div class="project-row">
+            <div class="project-info">
+              <div class="project-name">${name}</div>
+              <div class="project-meta">${savedAt}</div>
+            </div>
+            <div class="project-actions">
+              <button class="btn-tiny" onclick="loadProject('${safe}')">Load</button>
+              <button class="btn-tiny" onclick="exportProject('${safe}')">⬇</button>
+              <button class="btn-tiny danger" onclick="deleteProject('${safe}')">×</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function saveCurrentAsProject() {
+      const inputEl = document.getElementById('projectNameInput');
+      const name = (inputEl && inputEl.value) || '';
+      if (!name.trim()) { alert('Give the project a name first.'); return; }
+      saveProject(name.trim());
+      if (inputEl) inputEl.value = '';
+    }
+
 
     const nodeConfigs = {
       starting: {
@@ -773,6 +1088,16 @@
         hasInput: true,
         hasOutput: false, // Summaries are pure observers -- no downstream effect.
         readOnly: true
+      },
+      dataviz: {
+        title: 'Data Viz',
+        fields: [],
+        hasInput: true,
+        hasOutput: false,
+        readOnly: true,
+        resizable: true,
+        defaultWidth: 480,
+        defaultHeight: 340
       }
     };
 
@@ -916,11 +1241,22 @@
       el.dataset.type = nodeData.type;
       el.style.left = nodeData.x + 'px';
       el.style.top = nodeData.y + 'px';
+      // Apply per-node width/height for resizable nodes.
+      if (config.resizable) {
+        const w = nodeData.width || config.defaultWidth || 360;
+        const h = nodeData.height || config.defaultHeight || 260;
+        el.style.width = w + 'px';
+        el.style.height = h + 'px';
+      }
 
       let fieldsHTML = '';
-      if (config.readOnly) {
+      if (nodeData.type === 'dataviz') {
+        fieldsHTML = `<div class="dataviz-body" id="dataviz-body-${nodeData.id}">
+          <div class="summary-empty">Connect to a node to visualize</div>
+        </div>`;
+      } else if (config.readOnly) {
         fieldsHTML = `<div class="summary-body" id="summary-body-${nodeData.id}">
-          <div class="summary-empty">Click Calculate to populate</div>
+          <div class="summary-empty">Connect to a node to see the summary</div>
         </div>`;
       } else {
         config.fields.forEach(f => {
@@ -976,16 +1312,44 @@
         if (e.target.classList.contains('port')) return;
         if (e.target.classList.contains('node-delete')) return;
         if (e.target.classList.contains('field-input')) return;
-        
-        selectNode(nodeData.id);
-        draggingNode = nodeData.id;
-        // Compute mouse position in canvas (unscaled) coordinates
-        const mouseCanvasX = (e.clientX - panOffset.x - canvasContainer.getBoundingClientRect().left) / zoom;
-        const mouseCanvasY = (e.clientY - panOffset.y - canvasContainer.getBoundingClientRect().top) / zoom;
-        dragOffset = {
-          x: mouseCanvasX - nodeData.x,
-          y: mouseCanvasY - nodeData.y
-        };
+        if (e.target.closest && e.target.closest('.currency-input, .field-input, .details-toggle, summary')) return;
+
+        const cmdOrCtrl = e.metaKey || e.ctrlKey;
+        const altOrOpt = e.altKey;
+
+        if (cmdOrCtrl) {
+          // Cmd/Ctrl click: toggle this node's membership; no drag.
+          selectNode(nodeData.id, true);
+          e.preventDefault();
+          return;
+        }
+
+        // If we're clicking a node that's already part of the multi-selection,
+        // preserve the selection so we can drag the group. Otherwise, replace
+        // selection with just this node.
+        if (!selectedNodes.has(nodeData.id)) selectNode(nodeData.id);
+
+        // Option-drag duplicates the node(s) BEFORE starting the drag.
+        if (altOrOpt) {
+          duplicateSelectedNodes();
+        }
+
+        // Start dragging every currently-selected node.
+        const containerRect = canvasContainer.getBoundingClientRect();
+        const mouseCanvasX = (e.clientX - panOffset.x - containerRect.left) / zoom;
+        const mouseCanvasY = (e.clientY - panOffset.y - containerRect.top) / zoom;
+        draggingNode = nodeData.id; // primary node (compat)
+        dragOffset = { x: mouseCanvasX - nodeData.x, y: mouseCanvasY - nodeData.y };
+        // Snapshot start positions for every selected node so we can move as a group.
+        dragGroup = [...selectedNodes].map(id => {
+          const n = nodes.find(nn => nn.id === id);
+          return n ? { id, startX: n.x, startY: n.y } : null;
+        }).filter(Boolean);
+        // Ensure the primary node is in the drag group too.
+        if (!dragGroup.some(g => g.id === nodeData.id)) {
+          dragGroup.push({ id: nodeData.id, startX: nodeData.x, startY: nodeData.y });
+        }
+        dragAnchorMouse = { x: mouseCanvasX, y: mouseCanvasY };
         el.classList.add('dragging');
         e.preventDefault();
       });
@@ -1000,17 +1364,58 @@
       });
 
       canvas.appendChild(el);
+
+      // Persist resize for resizable node types.
+      if (config.resizable && typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(entries => {
+          for (const ent of entries) {
+            const w = Math.round(ent.contentRect.width);
+            const h = Math.round(ent.contentRect.height);
+            if (nodeData.width !== w || nodeData.height !== h) {
+              nodeData.width = w;
+              nodeData.height = h;
+              // Debounce update to avoid spamming during drag.
+              clearTimeout(el._resizeDebounce);
+              el._resizeDebounce = setTimeout(() => {
+                saveState();
+                updateConnections();
+              }, 80);
+            }
+          }
+        });
+        ro.observe(el);
+      }
     }
 
-    function selectNode(id) {
-      document.querySelectorAll('.node').forEach(n => n.classList.remove('selected'));
-      if (id) {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('selected');
-        selectedNode = id;
+    // Selection API:
+    //   selectNode(id)         -> replace selection with just this node
+    //   selectNode(id, true)   -> toggle this node's membership in the selection
+    //   selectNode(null)       -> clear selection
+    function selectNode(id, additive = false) {
+      if (id === null) {
+        selectedNodes.clear();
+      } else if (additive) {
+        if (selectedNodes.has(id)) selectedNodes.delete(id);
+        else selectedNodes.add(id);
       } else {
-        selectedNode = null;
+        selectedNodes.clear();
+        selectedNodes.add(id);
       }
+      // Update DOM classes.
+      document.querySelectorAll('.node').forEach(n => {
+        n.classList.toggle('selected', selectedNodes.has(n.id));
+      });
+      // Compat: expose the most-recent single selection.
+      selectedNode = id && selectedNodes.has(id) ? id : (selectedNodes.size ? [...selectedNodes].pop() : null);
+    }
+
+    // Convenience: set the selection to an exact list (used by marquee).
+    function setSelection(ids) {
+      selectedNodes = new Set(ids);
+      document.querySelectorAll('.node').forEach(n => {
+        n.classList.toggle('selected', selectedNodes.has(n.id));
+      });
+      selectedNode = selectedNodes.size ? [...selectedNodes].pop() : null;
     }
 
     function deleteNode(id) {
@@ -1018,10 +1423,163 @@
       if (nodeEl) nodeEl.remove();
       nodes = nodes.filter(n => n.id !== id);
       connections = connections.filter(c => c.from !== id && c.to !== id);
+      selectedNodes.delete(id);
       if (selectedNode === id) selectedNode = null;
       updateConnections();
       scheduleCalculate();
       saveState();
+    }
+
+    function deleteSelectedNodes() {
+      // Refuse to delete the last remaining Starting node.
+      const startingCount = nodes.filter(n => n.type === 'starting').length;
+      const toDelete = [...selectedNodes].filter(id => {
+        const n = nodes.find(nn => nn.id === id);
+        if (!n) return false;
+        if (n.type === 'starting' && startingCount <= 1) return false;
+        return true;
+      });
+      if (!toDelete.length) return;
+      _suppressLiveRecalc = true;
+      try { toDelete.forEach(id => deleteNode(id)); } finally { _suppressLiveRecalc = false; }
+      scheduleCalculate();
+    }
+
+    // ============ CLIPBOARD (cut/copy/paste) + DUPLICATE ============
+    function newNodeId() { return 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7); }
+
+    function copySelectedNodes() {
+      if (!selectedNodes.size) return;
+      // Deep-clone the selected nodes and any internal connections between them.
+      const ids = [...selectedNodes];
+      const cloneNodes = ids.map(id => {
+        const n = nodes.find(nn => nn.id === id);
+        return n ? { ...n, fields: { ...n.fields } } : null;
+      }).filter(Boolean);
+      const cloneConns = connections.filter(c =>
+        selectedNodes.has(c.from) && selectedNodes.has(c.to)
+      ).map(c => ({ ...c }));
+      nodeClipboard = { nodes: cloneNodes, connections: cloneConns };
+      showToast(`📋 Copied ${cloneNodes.length} node${cloneNodes.length === 1 ? '' : 's'}`);
+    }
+
+    function cutSelectedNodes() {
+      if (!selectedNodes.size) return;
+      copySelectedNodes();
+      deleteSelectedNodes();
+      showToast('✂️ Cut');
+    }
+
+    function pasteNodes() {
+      if (!nodeClipboard || !nodeClipboard.nodes.length) return;
+      const idMap = new Map();
+      const offset = { x: 40, y: 40 };
+      _suppressLiveRecalc = true;
+      try {
+        // Never allow pasting a Starting node (there can only be one).
+        const paste = nodeClipboard.nodes.filter(n => n.type !== 'starting');
+        paste.forEach(src => {
+          const id = newNodeId();
+          idMap.set(src.id, id);
+          const nd = { ...src, id, x: src.x + offset.x, y: src.y + offset.y, fields: { ...src.fields } };
+          nodes.push(nd);
+          renderNode(nd);
+        });
+        // Re-map internal connections to the new IDs.
+        nodeClipboard.connections.forEach(c => {
+          const from = idMap.get(c.from);
+          const to = idMap.get(c.to);
+          if (from && to) connections.push({ from, to });
+        });
+      } finally { _suppressLiveRecalc = false; }
+      // Select the newly-pasted nodes.
+      setSelection([...idMap.values()]);
+      updateConnections();
+      scheduleCalculate();
+      saveState();
+      showToast(`📌 Pasted ${idMap.size} node${idMap.size === 1 ? '' : 's'}`);
+    }
+
+    function duplicateSelectedNodes() {
+      if (!selectedNodes.size) return;
+      const idMap = new Map();
+      const offset = { x: 40, y: 40 };
+      _suppressLiveRecalc = true;
+      try {
+        const srcIds = [...selectedNodes].filter(id => {
+          const n = nodes.find(nn => nn.id === id);
+          return n && n.type !== 'starting';
+        });
+        srcIds.forEach(srcId => {
+          const src = nodes.find(nn => nn.id === srcId);
+          const id = newNodeId();
+          idMap.set(srcId, id);
+          const nd = { ...src, id, x: src.x + offset.x, y: src.y + offset.y, fields: { ...src.fields } };
+          nodes.push(nd);
+          renderNode(nd);
+        });
+        connections
+          .filter(c => idMap.has(c.from) && idMap.has(c.to))
+          .forEach(c => connections.push({ from: idMap.get(c.from), to: idMap.get(c.to) }));
+      } finally { _suppressLiveRecalc = false; }
+      setSelection([...idMap.values()]);
+      updateConnections();
+      scheduleCalculate();
+      saveState();
+    }
+
+    // ============ MARQUEE SELECTION ============
+    function beginMarquee(e) {
+      const containerRect = canvasContainer.getBoundingClientRect();
+      const startX = (e.clientX - panOffset.x - containerRect.left) / zoom;
+      const startY = (e.clientY - panOffset.y - containerRect.top) / zoom;
+      marqueeStart = { x: startX, y: startY };
+      marqueeEl = document.createElement('div');
+      marqueeEl.className = 'marquee';
+      marqueeEl.style.left = startX + 'px';
+      marqueeEl.style.top = startY + 'px';
+      marqueeEl.style.width = '0px';
+      marqueeEl.style.height = '0px';
+      canvas.appendChild(marqueeEl);
+      e.preventDefault();
+    }
+
+    function updateMarquee(e) {
+      if (!marqueeStart || !marqueeEl) return;
+      const containerRect = canvasContainer.getBoundingClientRect();
+      const curX = (e.clientX - panOffset.x - containerRect.left) / zoom;
+      const curY = (e.clientY - panOffset.y - containerRect.top) / zoom;
+      const x = Math.min(marqueeStart.x, curX);
+      const y = Math.min(marqueeStart.y, curY);
+      const w = Math.abs(curX - marqueeStart.x);
+      const h = Math.abs(curY - marqueeStart.y);
+      marqueeEl.style.left = x + 'px';
+      marqueeEl.style.top = y + 'px';
+      marqueeEl.style.width = w + 'px';
+      marqueeEl.style.height = h + 'px';
+    }
+
+    function finishMarquee(e) {
+      if (!marqueeStart || !marqueeEl) return;
+      const containerRect = canvasContainer.getBoundingClientRect();
+      const curX = (e.clientX - panOffset.x - containerRect.left) / zoom;
+      const curY = (e.clientY - panOffset.y - containerRect.top) / zoom;
+      const x1 = Math.min(marqueeStart.x, curX);
+      const y1 = Math.min(marqueeStart.y, curY);
+      const x2 = Math.max(marqueeStart.x, curX);
+      const y2 = Math.max(marqueeStart.y, curY);
+      // Intersect against each node's bbox using its rendered size.
+      const hits = nodes.filter(n => {
+        const el = document.getElementById(n.id);
+        if (!el) return false;
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        return !(n.x + w < x1 || n.x > x2 || n.y + h < y1 || n.y > y2);
+      }).map(n => n.id);
+      setSelection(hits);
+      marqueeEl.remove();
+      marqueeEl = null;
+      marqueeStart = null;
     }
 
     function updateField(nodeId, fieldName, value) {
@@ -1278,7 +1836,12 @@
 
       canvasContainer.addEventListener('mousedown', (e) => {
         if (e.target === canvasContainer || e.target === canvas || e.target === canvasGrid || e.target === connectionsLayer) {
-          selectNode(null);
+          // Cmd/Ctrl-drag on empty canvas -> marquee selection
+          if (e.metaKey || e.ctrlKey) {
+            beginMarquee(e);
+            return;
+          }
+          if (!e.shiftKey) selectNode(null);
           isPanning = true;
           panStart = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
           canvasContainer.style.cursor = 'grabbing';
@@ -1286,19 +1849,28 @@
       });
 
       document.addEventListener('mousemove', (e) => {
-        if (draggingNode) {
-          const node = nodes.find(n => n.id === draggingNode);
-          if (node) {
-            const el = document.getElementById(draggingNode);
-            const containerRect = canvasContainer.getBoundingClientRect();
-            const mouseCanvasX = (e.clientX - panOffset.x - containerRect.left) / zoom;
-            const mouseCanvasY = (e.clientY - panOffset.y - containerRect.top) / zoom;
-            node.x = Math.round((mouseCanvasX - dragOffset.x) / 20) * 20;
-            node.y = Math.round((mouseCanvasY - dragOffset.y) / 20) * 20;
-            el.style.left = node.x + 'px';
-            el.style.top = node.y + 'px';
-            updateConnections();
-          }
+        if (draggingNode && dragGroup.length) {
+          const containerRect = canvasContainer.getBoundingClientRect();
+          const mouseCanvasX = (e.clientX - panOffset.x - containerRect.left) / zoom;
+          const mouseCanvasY = (e.clientY - panOffset.y - containerRect.top) / zoom;
+          const dx = mouseCanvasX - dragAnchorMouse.x;
+          const dy = mouseCanvasY - dragAnchorMouse.y;
+          dragGroup.forEach(g => {
+            const node = nodes.find(n => n.id === g.id);
+            if (!node) return;
+            node.x = Math.round((g.startX + dx) / 20) * 20;
+            node.y = Math.round((g.startY + dy) / 20) * 20;
+            const el = document.getElementById(node.id);
+            if (el) {
+              el.style.left = node.x + 'px';
+              el.style.top = node.y + 'px';
+            }
+          });
+          updateConnections();
+        }
+
+        if (marqueeStart) {
+          updateMarquee(e);
         }
 
         if (isPanning) {
@@ -1308,13 +1880,23 @@
         }
       });
 
-      document.addEventListener('mouseup', () => {
+      document.addEventListener('mouseup', (e) => {
         if (draggingNode) {
           const el = document.getElementById(draggingNode);
           if (el) el.classList.remove('dragging');
+          dragGroup.forEach(g => {
+            const gel = document.getElementById(g.id);
+            if (gel) gel.classList.remove('dragging');
+          });
+          dragGroup = [];
           saveState();
         }
         draggingNode = null;
+
+        if (marqueeStart) {
+          finishMarquee(e);
+        }
+
         if (isPanning) {
           isPanning = false;
           canvasContainer.style.cursor = 'default';
@@ -1603,35 +2185,44 @@
         nodeSnapshots[node.id] = takeSnapshot();
       });
 
-      // Resolve each Summary to its parent's snapshot.
-      const summarySnapshots = {};
+      // Resolve each observer node (Summary + Data Viz) to its parent's snapshot.
+      const observerSnapshots = {};
       nodes.forEach(n => {
-        if (n.type !== 'summary') return;
+        if (n.type !== 'summary' && n.type !== 'dataviz') return;
         const parentEdge = connections.find(c => c.to === n.id);
         if (!parentEdge) return;
         const parentSnap = nodeSnapshots[parentEdge.from];
-        if (parentSnap) summarySnapshots[n.id] = parentSnap;
+        if (parentSnap) observerSnapshots[n.id] = parentSnap;
       });
 
-      // Render summary nodes
-      Object.entries(summarySnapshots).forEach(([id, snap]) => {
-        renderSummaryNode(id, snap);
+      // Render each observer.
+      Object.entries(observerSnapshots).forEach(([id, snap]) => {
+        const n = nodes.find(nn => nn.id === id);
+        if (!n) return;
+        if (n.type === 'summary') renderSummaryNode(id, snap);
+        else if (n.type === 'dataviz') renderDataVizNode(id, snap);
       });
-      // Any summary node NOT visited in the chain should show "not connected"
+      // Any observer NOT connected shows a placeholder.
       nodes.forEach(n => {
-        if (n.type === 'summary' && !summarySnapshots[n.id]) {
-          const body = document.getElementById('summary-body-' + n.id);
+        if ((n.type === 'summary' || n.type === 'dataviz') && !observerSnapshots[n.id]) {
+          const bodyId = (n.type === 'summary' ? 'summary-body-' : 'dataviz-body-') + n.id;
+          const body = document.getElementById(bodyId);
           if (body) {
             body.style.opacity = '1';
             body.innerHTML = `<div class="summary-empty">Not connected to the flow</div>`;
           }
         }
       });
-      // Clear stale opacity for the ones we did update
-      Object.keys(summarySnapshots).forEach(id => {
-        const body = document.getElementById('summary-body-' + id);
+      // Clear stale opacity.
+      Object.keys(observerSnapshots).forEach(id => {
+        const n = nodes.find(nn => nn.id === id);
+        if (!n) return;
+        const body = document.getElementById((n.type === 'summary' ? 'summary-body-' : 'dataviz-body-') + id);
         if (body) body.style.opacity = '1';
       });
+
+      // Legacy alias for FIRE-check below.
+      const summarySnapshots = observerSnapshots;
 
       // Trigger confetti if any summary shows a FIRE-level success (final balance > 4x starting)
       const anyFire = Object.values(summarySnapshots).some(s =>
@@ -1807,15 +2398,66 @@
         tableHTML += '</tbody></table>';
       }
 
+      // Compact layout: only the top status card is visible by default;
+      // detail rows + metrics are hidden behind a twirl-down.
+      // Chart & yearly table are NOT rendered here anymore -- they live in
+      // the Data Viz node.
       body.innerHTML =
         statusHTML +
-        summaryRowsHTML +
-        metricsHTML +
-        chartHTML +
-        tableHTML +
+        `<details class="summary-details">
+           <summary class="summary-details-toggle">Show details</summary>
+           <div class="summary-details-body">
+             ${summaryRowsHTML}
+             ${metricsHTML}
+           </div>
+         </details>` +
         `<div class="summary-recalc-hint">⚡ Live — updates as you edit</div>`;
 
       // Connections need a redraw because the node may have grown taller
+      requestAnimationFrame(() => updateConnections());
+    }
+
+    // Data Viz node renders a resizable chart + a twirl-down age/balance table.
+    function renderDataVizNode(nodeId, snap) {
+      const body = document.getElementById('dataviz-body-' + nodeId);
+      if (!body) return;
+      const fmtFull = (n) => {
+        const sign = n < 0 ? '-' : '';
+        return sign + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
+      };
+
+      const yearly = snap.yearlyData || [];
+      const chartHTML = renderChart({
+        yearlyData: yearly,
+        failedAtAge: snap.failedAtAge
+      });
+
+      let tableHTML = '';
+      if (yearly.length > 0) {
+        tableHTML = `
+          <details class="summary-details" open>
+            <summary class="summary-details-toggle">Age &amp; Balance table</summary>
+            <div class="dataviz-table-wrap">
+              <table class="results-table">
+                <thead>
+                  <tr><th>Age</th><th>Balance</th></tr>
+                </thead>
+                <tbody>
+                  ${yearly.map(row => {
+                    const cls = row.balance < 0 ? 'negative' : 'positive';
+                    return `<tr><td>${row.age}</td><td class="${cls}">${fmtFull(row.balance)}</td></tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        `;
+      }
+
+      body.innerHTML = `
+        <div class="dataviz-chart">${chartHTML}</div>
+        ${tableHTML}
+      `;
       requestAnimationFrame(() => updateConnections());
     }
 
@@ -1981,15 +2623,42 @@
 
     // ============ KEYBOARD ============
     document.addEventListener('keydown', (e) => {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode) {
-        if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-          deleteNode(selectedNode);
-          e.preventDefault();
-        }
+      // Ignore shortcuts when typing into an input/textarea.
+      const inField = document.activeElement && (
+        document.activeElement.tagName === 'INPUT' ||
+        document.activeElement.tagName === 'TEXTAREA'
+      );
+
+      // Delete selected node(s)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodes.size && !inField) {
+        deleteSelectedNodes();
+        e.preventDefault();
+        return;
       }
+
+      // Cmd/Ctrl+Enter -> manual Calculate (still supported)
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         calculate();
         e.preventDefault();
+        return;
+      }
+
+      // Clipboard shortcuts (skip while typing so browser's own copy still works)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !inField) {
+        const k = e.key.toLowerCase();
+        if (k === 'c') { copySelectedNodes();  e.preventDefault(); return; }
+        if (k === 'x') { cutSelectedNodes();   e.preventDefault(); return; }
+        if (k === 'v') { pasteNodes();         e.preventDefault(); return; }
+        if (k === 'd') { duplicateSelectedNodes(); e.preventDefault(); return; }
+        if (k === 'a') {
+          setSelection(nodes.map(n => n.id));
+          e.preventDefault();
+          return;
+        }
+      }
+
+      if (e.key === 'Escape') {
+        selectNode(null);
       }
     });
 
