@@ -24,7 +24,7 @@
       --accent-monthly: #a371f7;
       --accent-social: #f78166;
       --accent-summary: #f9c513;
-      --accent-dataviz: #56d4dd;
+      --accent-timeline: #56d4dd;
       --text-primary: #e6edf3;
       --text-secondary: #8b949e;
       --connection-line: #58a6ff;
@@ -100,8 +100,16 @@
     .btn-monthly { border-color: var(--accent-monthly); color: var(--accent-monthly); }
     .btn-social { border-color: var(--accent-social); color: var(--accent-social); }
     .btn-summary { border-color: var(--accent-summary); color: var(--accent-summary); }
-    .btn-dataviz { border-color: var(--accent-dataviz); color: var(--accent-dataviz); }
-    .btn-project { border-color: var(--text-secondary); color: var(--text-primary); }
+    .btn-project {
+      background: var(--bg-node);
+      color: var(--text-primary);
+      border: 1px solid var(--border-default);
+    }
+    .btn-project:hover {
+      border-color: var(--border-selected);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
 
     .btn-calculate {
       background: var(--accent-starting);
@@ -292,7 +300,11 @@
     .projects-saveform .field-input {
       flex: 1 1 auto;
     }
-    .projects-saveform .btn { padding: 6px 10px; font-size: 11px; }
+    .projects-saveform .btn {
+      padding: 6px 10px;
+      font-size: 11px;
+      margin-left: 0; /* override .btn-calculate’s margin-left:auto inside the panel */
+    }
     .projects-import { display: flex; }
     .import-label {
       cursor: pointer;
@@ -342,40 +354,6 @@
       border-top: 4px solid var(--accent-summary);
       min-width: 380px;
     }
-    .node[data-type="dataviz"] {
-      border-top: 4px solid var(--accent-dataviz);
-      min-width: 360px;
-      min-height: 260px;
-      display: flex;
-      flex-direction: column;
-      resize: both;
-      overflow: hidden;
-    }
-    .node[data-type="dataviz"] .node-header { flex: 0 0 auto; }
-    .node[data-type="dataviz"] .dataviz-body {
-      flex: 1 1 auto;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .node[data-type="dataviz"] .dataviz-chart {
-      flex: 1 1 auto;
-      min-height: 140px;
-      display: flex;
-      align-items: stretch;
-    }
-    .node[data-type="dataviz"] .dataviz-chart svg {
-      width: 100%;
-      height: 100%;
-    }
-    .node[data-type="dataviz"] .dataviz-table-wrap {
-      max-height: 200px;
-      overflow-y: auto;
-      border-top: 1px solid var(--border-default);
-      margin-top: 8px;
-      padding-top: 6px;
-    }
-    .node[data-type="dataviz"] .node-title { color: var(--accent-dataviz); }
 
     .node-header {
       display: flex;
@@ -400,7 +378,6 @@
     .node[data-type="monthly"] .node-title { color: var(--accent-monthly); }
     .node[data-type="social"] .node-title { color: var(--accent-social); }
     .node[data-type="summary"] .node-title { color: var(--accent-summary); }
-    .node[data-type="dataviz"] .node-title { color: var(--accent-dataviz); }
 
     /* Summary node read-only display */
     .summary-row {
@@ -775,42 +752,65 @@
     }
 
     /* Hint */
-    .hint {
+    /* ============ Bottom Timeline Panel ============ */
+    .timeline-panel {
       position: fixed;
-      bottom: 16px;
-      left: 16px;
-      background: var(--bg-panel);
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      height: 200px;
+      background: rgba(22, 27, 34, 0.75);
       border: 1px solid var(--border-default);
-      padding: 8px 12px;
-      border-radius: 6px;
+      border-radius: 10px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 700;
+      display: flex;
+      flex-direction: column;
+      padding: 8px 12px 6px;
+      box-shadow: 0 -8px 32px rgba(0,0,0,0.35);
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    .timeline-panel.hidden {
+      transform: translateY(calc(100% + 20px));
+      opacity: 0;
+      pointer-events: none;
+    }
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .timeline-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+    .timeline-controls { display: flex; gap: 8px; align-items: center; }
+    .timeline-badge {
       font-size: 10px;
       color: var(--text-secondary);
-      z-index: 200;
-      max-width: 280px;
-      line-height: 1.4;
     }
-
-    .hint kbd {
-      background: var(--bg-canvas);
-      border: 1px solid var(--border-default);
-      padding: 1px 5px;
-      border-radius: 3px;
-      font-family: inherit;
-      font-size: 9px;
+    .timeline-chart {
+      flex: 1 1 auto;
+      overflow: hidden;
+      display: flex;
+      align-items: stretch;
     }
-
-    /* Zoom indicator */
-    .zoom-indicator {
-      position: fixed;
-      bottom: 16px;
-      right: 16px;
-      background: var(--bg-panel);
-      border: 1px solid var(--border-default);
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 10px;
+    .timeline-chart svg {
+      width: 100%;
+      height: 100%;
+    }
+    .timeline-empty {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       color: var(--text-secondary);
-      z-index: 200;
+      font-size: 11px;
     }
   </style>
 </head>
@@ -824,10 +824,10 @@
     <button class="btn btn-node btn-monthly" onclick="addNode('monthly')">+ Monthly</button>
     <button class="btn btn-node btn-social" onclick="addNode('social')">+ Social Security</button>
     <button class="btn btn-node btn-summary" onclick="addNode('summary')">+ Summary</button>
-    <button class="btn btn-node btn-dataviz" onclick="addNode('dataviz')">+ Data Viz</button>
     <div class="toolbar-divider"></div>
     <button class="btn btn-calculate" onclick="calculate()">Calculate</button>
     <button class="btn btn-project" onclick="toggleProjectsPanel()">Projects</button>
+    <button class="btn btn-project" onclick="toggleTimeline()">📈 Graph</button>
     <button class="btn btn-share" onclick="shareUrl()">Share</button>
     <button class="btn btn-clear" onclick="clearAll()">Clear</button>
     <span class="save-indicator" id="saveIndicator">✓ Saved</span>
@@ -858,13 +858,20 @@
     </div>
   </div>
 
-  <div class="hint">
-    💡 <kbd>scroll</kbd> zoom · <kbd>drag</kbd> pan · <kbd>⌘drag</kbd> marquee · <kbd>⌘click</kbd> multi-select · <kbd>⌥drag</kbd> duplicate · <kbd>⌘C/V/X/D</kbd> copy/paste/cut/dup · <kbd>del</kbd> delete
-  </div>
-
-  <div class="zoom-indicator" id="zoomIndicator">100%</div>
-
   <div class="toast" id="toast"></div>
+
+  <div class="timeline-panel" id="timelinePanel">
+    <div class="timeline-header">
+      <span class="timeline-title">📈 Net Worth Over Time</span>
+      <div class="timeline-controls">
+        <span class="timeline-badge" id="timelineBadge"></span>
+        <button class="btn-tiny" onclick="toggleTimeline()">Hide</button>
+      </div>
+    </div>
+    <div class="timeline-chart" id="timelineChart">
+      <div class="timeline-empty">Add nodes to see your projection.</div>
+    </div>
+  </div>
 
   <script>
     const canvas = document.getElementById('canvas');
@@ -872,7 +879,7 @@
     const canvasGrid = document.getElementById('canvasGrid');
     const connectionsLayer = document.getElementById('connectionsLayer');
     const saveIndicator = document.getElementById('saveIndicator');
-    const zoomIndicator = document.getElementById('zoomIndicator');
+    const zoomIndicator = null; // removed from UI; keep var for compat
     const toast = document.getElementById('toast');
 
     let nodes = [];
@@ -1088,21 +1095,21 @@
         hasInput: true,
         hasOutput: false, // Summaries are pure observers -- no downstream effect.
         readOnly: true
-      },
-      dataviz: {
-        title: 'Data Viz',
-        fields: [],
-        hasInput: true,
-        hasOutput: false,
-        readOnly: true,
-        resizable: true,
-        defaultWidth: 480,
-        defaultHeight: 340
       }
     };
 
     // ============ INIT ============
     function init() {
+      // Restore timeline visibility preference from localStorage.
+      try {
+        const pref = localStorage.getItem('retirement-calc-timeline-visible');
+        if (pref === '0') {
+          _timelineVisible = false;
+          const panel = document.getElementById('timelinePanel');
+          if (panel) panel.classList.add('hidden');
+        }
+      } catch (e) {}
+
       // Suppress live recalc while we hydrate state; fire once at the end.
       _suppressLiveRecalc = true;
       try {
@@ -1154,10 +1161,17 @@
       }
     }
 
-    // Strip any legacy edges that originate from a Summary node. Summaries
-    // are pure observers now (no outputs), so any such edge is a leftover
-    // from an older schema and should be dropped.
+    // Strip legacy schema artifacts on load:
+    //   1. Edges originating from a Summary output (Summaries are input-only).
+    //   2. Any 'dataviz' nodes from v1.2 (replaced by the bottom timeline panel).
     function sanitizeConnections() {
+      const droppedDataViz = nodes.filter(n => n.type === 'dataviz');
+      if (droppedDataViz.length) {
+        const ids = new Set(droppedDataViz.map(n => n.id));
+        nodes = nodes.filter(n => !ids.has(n.id));
+        connections = connections.filter(c => !ids.has(c.from) && !ids.has(c.to));
+        console.info('sanitizeConnections: removed', droppedDataViz.length, 'legacy dataviz node(s)');
+      }
       const summaryIds = new Set(nodes.filter(n => n.type === 'summary').map(n => n.id));
       const before = connections.length;
       connections = connections.filter(c => !summaryIds.has(c.from));
@@ -1250,11 +1264,7 @@
       }
 
       let fieldsHTML = '';
-      if (nodeData.type === 'dataviz') {
-        fieldsHTML = `<div class="dataviz-body" id="dataviz-body-${nodeData.id}">
-          <div class="summary-empty">Connect to a node to visualize</div>
-        </div>`;
-      } else if (config.readOnly) {
+      if (config.readOnly) {
         fieldsHTML = `<div class="summary-body" id="summary-body-${nodeData.id}">
           <div class="summary-empty">Connect to a node to see the summary</div>
         </div>`;
@@ -1828,7 +1838,7 @@
       canvasGrid.style.transform = '';
       canvasGrid.style.backgroundPosition = `${panOffset.x}px ${panOffset.y}px`;
       canvasGrid.style.backgroundSize = `${20 * zoom}px ${20 * zoom}px`;
-      zoomIndicator.textContent = Math.round(zoom * 100) + '%';
+      /* zoom indicator removed */
     }
 
     function setupCanvasInteraction() {
@@ -2185,44 +2195,35 @@
         nodeSnapshots[node.id] = takeSnapshot();
       });
 
-      // Resolve each observer node (Summary + Data Viz) to its parent's snapshot.
-      const observerSnapshots = {};
+      // Resolve each Summary to its parent's snapshot.
+      const summarySnapshots = {};
       nodes.forEach(n => {
-        if (n.type !== 'summary' && n.type !== 'dataviz') return;
+        if (n.type !== 'summary') return;
         const parentEdge = connections.find(c => c.to === n.id);
         if (!parentEdge) return;
         const parentSnap = nodeSnapshots[parentEdge.from];
-        if (parentSnap) observerSnapshots[n.id] = parentSnap;
+        if (parentSnap) summarySnapshots[n.id] = parentSnap;
       });
 
-      // Render each observer.
-      Object.entries(observerSnapshots).forEach(([id, snap]) => {
-        const n = nodes.find(nn => nn.id === id);
-        if (!n) return;
-        if (n.type === 'summary') renderSummaryNode(id, snap);
-        else if (n.type === 'dataviz') renderDataVizNode(id, snap);
+      Object.entries(summarySnapshots).forEach(([id, snap]) => {
+        renderSummaryNode(id, snap);
       });
-      // Any observer NOT connected shows a placeholder.
       nodes.forEach(n => {
-        if ((n.type === 'summary' || n.type === 'dataviz') && !observerSnapshots[n.id]) {
-          const bodyId = (n.type === 'summary' ? 'summary-body-' : 'dataviz-body-') + n.id;
-          const body = document.getElementById(bodyId);
+        if (n.type === 'summary' && !summarySnapshots[n.id]) {
+          const body = document.getElementById('summary-body-' + n.id);
           if (body) {
             body.style.opacity = '1';
             body.innerHTML = `<div class="summary-empty">Not connected to the flow</div>`;
           }
         }
       });
-      // Clear stale opacity.
-      Object.keys(observerSnapshots).forEach(id => {
-        const n = nodes.find(nn => nn.id === id);
-        if (!n) return;
-        const body = document.getElementById((n.type === 'summary' ? 'summary-body-' : 'dataviz-body-') + id);
+      Object.keys(summarySnapshots).forEach(id => {
+        const body = document.getElementById('summary-body-' + id);
         if (body) body.style.opacity = '1';
       });
 
-      // Legacy alias for FIRE-check below.
-      const summarySnapshots = observerSnapshots;
+      // Update the bottom floating timeline chart with the full-flow snapshot.
+      updateTimeline(nodeSnapshots, sim, startAge);
 
       // Trigger confetti if any summary shows a FIRE-level success (final balance > 4x starting)
       const anyFire = Object.values(summarySnapshots).some(s =>
@@ -2417,48 +2418,41 @@
       requestAnimationFrame(() => updateConnections());
     }
 
-    // Data Viz node renders a resizable chart + a twirl-down age/balance table.
-    function renderDataVizNode(nodeId, snap) {
-      const body = document.getElementById('dataviz-body-' + nodeId);
-      if (!body) return;
-      const fmtFull = (n) => {
-        const sign = n < 0 ? '-' : '';
-        return sign + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
-      };
+    // ============ Bottom Timeline Panel ============
+    let _timelineVisible = true;
+    function toggleTimeline() {
+      _timelineVisible = !_timelineVisible;
+      const panel = document.getElementById('timelinePanel');
+      if (panel) panel.classList.toggle('hidden', !_timelineVisible);
+      try { localStorage.setItem('retirement-calc-timeline-visible', _timelineVisible ? '1' : '0'); } catch (e) {}
+    }
 
-      const yearly = snap.yearlyData || [];
-      const chartHTML = renderChart({
-        yearlyData: yearly,
-        failedAtAge: snap.failedAtAge
-      });
+    function updateTimeline(nodeSnapshots, sim, startAge) {
+      const chartEl = document.getElementById('timelineChart');
+      const badgeEl = document.getElementById('timelineBadge');
+      if (!chartEl) return;
 
-      let tableHTML = '';
-      if (yearly.length > 0) {
-        tableHTML = `
-          <details class="summary-details" open>
-            <summary class="summary-details-toggle">Age &amp; Balance table</summary>
-            <div class="dataviz-table-wrap">
-              <table class="results-table">
-                <thead>
-                  <tr><th>Age</th><th>Balance</th></tr>
-                </thead>
-                <tbody>
-                  ${yearly.map(row => {
-                    const cls = row.balance < 0 ? 'negative' : 'positive';
-                    return `<tr><td>${row.age}</td><td class="${cls}">${fmtFull(row.balance)}</td></tr>`;
-                  }).join('')}
-                </tbody>
-              </table>
-            </div>
-          </details>
-        `;
+      const yearly = sim && sim.yearlyData ? sim.yearlyData : [];
+      if (!yearly.length || yearly.length < 2) {
+        chartEl.innerHTML = `<div class="timeline-empty">Add a Monthly Finances node (or Social Security) so a projection can be drawn.</div>`;
+        if (badgeEl) badgeEl.textContent = '';
+        return;
       }
 
-      body.innerHTML = `
-        <div class="dataviz-chart">${chartHTML}</div>
-        ${tableHTML}
-      `;
-      requestAnimationFrame(() => updateConnections());
+      const fmt = (n) => {
+        const sign = n < 0 ? '-' : '';
+        const a = Math.abs(n);
+        if (a >= 1e9) return sign + '$' + (a/1e9).toFixed(2) + 'B';
+        if (a >= 1e6) return sign + '$' + (a/1e6).toFixed(2) + 'M';
+        if (a >= 1e3) return sign + '$' + (a/1e3).toFixed(0) + 'K';
+        return sign + '$' + Math.round(a);
+      };
+
+      chartEl.innerHTML = renderChart({ yearlyData: yearly, failedAtAge: sim.failedAtAge }, { wide: true });
+      if (badgeEl) {
+        const last = yearly[yearly.length - 1];
+        badgeEl.textContent = `Age ${last.age} → ${fmt(last.balance)}`;
+      }
     }
 
     function getConnectedNodes(startNodeId) {
@@ -2488,9 +2482,12 @@
     }
 
     // ============ CHART (shared by summary nodes) ============
-    function renderChart(data) {
-      const w = 380;
-      const h = 200;
+    function renderChart(data, opts = {}) {
+      // opts.wide === true renders a header-less, expanded chart (used by
+      // the bottom timeline panel). Larger viewBox width so labels breathe.
+      const wide = !!opts.wide;
+      const w = wide ? 1200 : 380;
+      const h = wide ? 180 : 200;
       const pad = { l: 50, r: 10, t: 10, b: 25 };
       const innerW = w - pad.l - pad.r;
       const innerH = h - pad.t - pad.b;
@@ -2562,6 +2559,30 @@
           <line class="chart-failure-marker" x1="${fx}" y1="${pad.t}" x2="${fx}" y2="${pad.t + innerH}"/>
           <text class="chart-axis-label" x="${fx}" y="${pad.t - 2}" text-anchor="middle" fill="var(--accent-expense)" font-weight="700">FAIL</text>
         `;
+      }
+
+      // Denser X ticks in wide mode (up to 8 ticks, whole-age spaced).
+      if (wide) {
+        xLabels = '';
+        const tickCount = Math.min(8, Math.max(2, Math.round(ageRange / 5) + 1));
+        for (let i = 0; i < tickCount; i++) {
+          const age = Math.round(minAge + (ageRange * i) / (tickCount - 1));
+          const x = xScale(age);
+          xLabels += `<text class="chart-axis-label" x="${x}" y="${h - 8}" text-anchor="middle">${age}</text>`;
+        }
+      }
+
+      if (wide) {
+        return `
+          <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">`
+          + gridLines
+          + yLabels
+          + xLabels
+          + `<path class="chart-area" d="${areaPath}"/>`
+          + zeroLine
+          + `<path class="chart-line" d="${linePath}"/>`
+          + failMarker
+          + `</svg>`;
       }
 
       return `
