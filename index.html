@@ -249,7 +249,10 @@
     .node[data-type="income"] { border-top: 4px solid var(--accent-income); }
     .node[data-type="monthly"] { border-top: 4px solid var(--accent-monthly); }
     .node[data-type="social"] { border-top: 4px solid var(--accent-social); }
-    .node[data-type="summary"] { border-top: 4px solid var(--accent-summary); }
+    .node[data-type="summary"] {
+      border-top: 4px solid var(--accent-summary);
+      min-width: 380px;
+    }
 
     .node-header {
       display: flex;
@@ -404,63 +407,7 @@
       margin-top: -7px;
     }
 
-    /* Results Panel */
-    .results-panel {
-      position: fixed;
-      top: 72px;
-      right: 16px;
-      width: 420px;
-      max-height: calc(100vh - 88px);
-      background: var(--bg-panel);
-      border: 1px solid var(--border-default);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      overflow: hidden;
-      z-index: 500;
-      backdrop-filter: blur(12px);
-      display: none;
-    }
-
-    .results-panel.show {
-      display: block;
-    }
-
-    .results-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border-default);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .results-title {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    .results-close {
-      background: none;
-      border: none;
-      color: var(--text-secondary);
-      cursor: pointer;
-      font-size: 20px;
-    }
-
-    .results-content {
-      padding: 16px;
-      max-height: calc(100vh - 140px);
-      overflow-y: auto;
-    }
-
-    .results-empty {
-      text-align: center;
-      color: var(--text-secondary);
-      padding: 32px;
-      font-size: 12px;
-    }
-
+    /* Projection results (rendered inside summary nodes) */
     .plan-status {
       padding: 16px;
       border-radius: 8px;
@@ -740,16 +687,6 @@
     </div>
   </div>
 
-  <div class="results-panel" id="resultsPanel">
-    <div class="results-header">
-      <div class="results-title">📊 Projection Results</div>
-      <button class="results-close" onclick="closeResults()">×</button>
-    </div>
-    <div class="results-content" id="resultsContent">
-      <div class="results-empty">Click Calculate to see results</div>
-    </div>
-  </div>
-
   <div class="hint">
     💡 <kbd>scroll</kbd> zoom · <kbd>drag canvas</kbd> pan · <kbd>alt+click</kbd> delete connection · <kbd>del</kbd> delete node
   </div>
@@ -763,8 +700,6 @@
     const canvasContainer = document.getElementById('canvasContainer');
     const canvasGrid = document.getElementById('canvasGrid');
     const connectionsLayer = document.getElementById('connectionsLayer');
-    const resultsPanel = document.getElementById('resultsPanel');
-    const resultsContent = document.getElementById('resultsContent');
     const saveIndicator = document.getElementById('saveIndicator');
     const zoomIndicator = document.getElementById('zoomIndicator');
     const toast = document.getElementById('toast');
@@ -786,7 +721,7 @@
       starting: {
         title: 'Starting Data',
         fields: [
-          { name: 'capital', label: 'Starting Capital ($)', type: 'number', value: 500000 },
+          { name: 'capital', label: 'Starting Capital ($)', type: 'number', value: 500000, currency: true },
           { name: 'age', label: 'Age', type: 'number', value: 30 }
         ],
         hasInput: false,
@@ -796,7 +731,7 @@
         title: 'One Time Expense',
         fields: [
           { name: 'description', label: 'Description', type: 'text', value: '' },
-          { name: 'amount', label: 'Amount ($)', type: 'number', value: 0 }
+          { name: 'amount', label: 'Amount ($)', type: 'number', value: 0, currency: true }
         ],
         hasInput: true,
         hasOutput: true
@@ -805,7 +740,7 @@
         title: 'One Time Income',
         fields: [
           { name: 'description', label: 'Description', type: 'text', value: '' },
-          { name: 'amount', label: 'Amount ($)', type: 'number', value: 0 }
+          { name: 'amount', label: 'Amount ($)', type: 'number', value: 0, currency: true }
         ],
         hasInput: true,
         hasOutput: true
@@ -813,11 +748,10 @@
       monthly: {
         title: 'Monthly Finances',
         fields: [
-          { name: 'monthlyIncome', label: 'Monthly Income ($)', type: 'number', value: 5000 },
-          { name: 'monthlyExpenses', label: 'Monthly Expenses ($)', type: 'number', value: 3000 },
+          { name: 'monthlyIncome', label: 'Monthly Income ($)', type: 'number', value: 5000, currency: true },
+          { name: 'monthlyExpenses', label: 'Monthly Expenses ($)', type: 'number', value: 3000, currency: true },
           { name: 'annualReturn', label: 'Annual Return (%)', type: 'number', value: 7 },
           { name: 'inflation', label: 'Inflation (%)', type: 'number', value: 3 },
-          { name: 'taxRate', label: 'Effective Tax Rate (%)', type: 'number', value: 22 },
           { name: 'years', label: 'Years', type: 'number', value: 35 }
         ],
         hasInput: true,
@@ -826,7 +760,7 @@
       social: {
         title: 'Social Security',
         fields: [
-          { name: 'monthlyAmount', label: 'Monthly Amount ($)', type: 'number', value: 2000 },
+          { name: 'monthlyAmount', label: 'Monthly Amount ($)', type: 'number', value: 2000, currency: true },
           { name: 'startAge', label: 'Start Age', type: 'number', value: 67 },
           { name: 'cola', label: 'Annual COLA (%)', type: 'number', value: 2.5 }
         ],
@@ -837,57 +771,78 @@
         title: 'Summary',
         fields: [],
         hasInput: true,
-        hasOutput: true,
+        hasOutput: false, // Summaries are pure observers -- no downstream effect.
         readOnly: true
       }
     };
 
     // ============ INIT ============
     function init() {
-      // Try URL hash first
-      if (location.hash.length > 1) {
-        try {
-          const decoded = JSON.parse(atob(location.hash.slice(1)));
-          if (decoded.nodes && decoded.connections) {
-            nodes = decoded.nodes;
-            connections = decoded.connections;
-            renderAll();
-            showToast('📥 Plan loaded from URL');
-            history.replaceState(null, '', location.pathname);
-            setupCanvasInteraction();
-            return;
+      // Suppress live recalc while we hydrate state; fire once at the end.
+      _suppressLiveRecalc = true;
+      try {
+        // Try URL hash first
+        if (location.hash.length > 1) {
+          try {
+            const decoded = JSON.parse(atob(location.hash.slice(1)));
+            if (decoded.nodes && decoded.connections) {
+              nodes = decoded.nodes;
+              connections = decoded.connections;
+              renderAll();
+              showToast('📥 Plan loaded from URL');
+              history.replaceState(null, '', location.pathname);
+              setupCanvasInteraction();
+              return;
+            }
+          } catch (e) {
+            console.warn('Failed to parse URL hash', e);
           }
-        } catch (e) {
-          console.warn('Failed to parse URL hash', e);
         }
-      }
 
-      // Try localStorage
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        try {
-          const decoded = JSON.parse(saved);
-          if (decoded.nodes && decoded.connections) {
-            nodes = decoded.nodes;
-            connections = decoded.connections;
-            if (decoded.panOffset) panOffset = decoded.panOffset;
-            if (decoded.zoom) zoom = decoded.zoom;
-            renderAll();
-            applyTransform();
-            setupCanvasInteraction();
-            return;
+        // Try localStorage
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          try {
+            const decoded = JSON.parse(saved);
+            if (decoded.nodes && decoded.connections) {
+              nodes = decoded.nodes;
+              connections = decoded.connections;
+              if (decoded.panOffset) panOffset = decoded.panOffset;
+              if (decoded.zoom) zoom = decoded.zoom;
+              renderAll();
+              applyTransform();
+              setupCanvasInteraction();
+              return;
+            }
+          } catch (e) {
+            console.warn('Failed to load saved state', e);
           }
-        } catch (e) {
-          console.warn('Failed to load saved state', e);
         }
-      }
 
-      // Fresh start
-      addNode('starting', 100, 100);
-      setupCanvasInteraction();
+        // Fresh start
+        addNode('starting', 100, 100);
+        setupCanvasInteraction();
+      } finally {
+        _suppressLiveRecalc = false;
+        // Kick off initial calc so summary nodes render immediately.
+        scheduleCalculate();
+      }
+    }
+
+    // Strip any legacy edges that originate from a Summary node. Summaries
+    // are pure observers now (no outputs), so any such edge is a leftover
+    // from an older schema and should be dropped.
+    function sanitizeConnections() {
+      const summaryIds = new Set(nodes.filter(n => n.type === 'summary').map(n => n.id));
+      const before = connections.length;
+      connections = connections.filter(c => !summaryIds.has(c.from));
+      if (connections.length !== before) {
+        console.info('sanitizeConnections: dropped', before - connections.length, 'edges from Summary outputs');
+      }
     }
 
     function renderAll() {
+      sanitizeConnections();
       document.querySelectorAll('.node').forEach(n => n.remove());
       nodes.forEach(n => renderNode(n));
       requestAnimationFrame(() => updateConnections());
@@ -949,6 +904,7 @@
       nodes.push(nodeData);
       renderNode(nodeData);
       requestAnimationFrame(() => updateConnections());
+      scheduleCalculate();
       saveState();
     }
 
@@ -969,15 +925,30 @@
       } else {
         config.fields.forEach(f => {
           const val = nodeData.fields[f.name] !== undefined ? nodeData.fields[f.name] : f.value;
-          fieldsHTML += `
-            <div class="node-field">
-              <label class="field-label">${f.label}</label>
-              <input type="${f.type}" class="field-input" 
-                data-field="${f.name}" 
-                value="${val}"
-                oninput="updateField('${nodeData.id}', '${f.name}', this.value)">
-            </div>
-          `;
+          if (f.currency) {
+            // Text input with live thousands-separator formatting.
+            const displayVal = formatCurrencyInput(val);
+            fieldsHTML += `
+              <div class="node-field">
+                <label class="field-label">${f.label}</label>
+                <input type="text" inputmode="decimal" class="field-input currency-input"
+                  data-field="${f.name}"
+                  value="${displayVal}"
+                  oninput="onCurrencyInput(event, '${nodeData.id}', '${f.name}')"
+                  onblur="onCurrencyBlur(event, '${nodeData.id}', '${f.name}')">
+              </div>
+            `;
+          } else {
+            fieldsHTML += `
+              <div class="node-field">
+                <label class="field-label">${f.label}</label>
+                <input type="${f.type}" class="field-input"
+                  data-field="${f.name}"
+                  value="${val}"
+                  oninput="updateField('${nodeData.id}', '${f.name}', this.value)">
+              </div>
+            `;
+          }
         });
       }
 
@@ -1049,6 +1020,7 @@
       connections = connections.filter(c => c.from !== id && c.to !== id);
       if (selectedNode === id) selectedNode = null;
       updateConnections();
+      scheduleCalculate();
       saveState();
     }
 
@@ -1056,22 +1028,91 @@
       const node = nodes.find(n => n.id === nodeId);
       if (node) {
         node.fields[fieldName] = fieldName === 'description' ? value : (parseFloat(value) || 0);
-        markSummariesStale();
+        scheduleCalculate();
         saveState();
       }
     }
 
-    function markSummariesStale() {
-      nodes.forEach(n => {
-        if (n.type === 'summary') {
-          const body = document.getElementById('summary-body-' + n.id);
-          if (body && !body.querySelector('.summary-empty')) {
-            // Dim existing values; user must press Calculate to refresh
-            body.style.opacity = '0.45';
-          }
-        }
-      });
+    // ============ CURRENCY INPUT FORMATTING ============
+    // Renders a numeric value with thousand separators for display.
+    // Handles integer + optional decimal (e.g. 1234.56 -> "1,234.56").
+    function formatCurrencyInput(n) {
+      if (n === null || n === undefined || n === '') return '';
+      const num = typeof n === 'number' ? n : parseFloat(String(n).replace(/,/g, ''));
+      if (!isFinite(num)) return '';
+      // Preserve up to 2 decimal places when present; drop trailing zeros for clean display.
+      const [intPart, decPart] = Math.abs(num).toString().split('.');
+      const sign = num < 0 ? '-' : '';
+      const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return sign + withCommas + (decPart !== undefined ? '.' + decPart : '');
     }
+
+    // Parse the visible input string back to a number, ignoring commas + $.
+    function parseCurrencyInput(str) {
+      if (str === null || str === undefined) return 0;
+      const cleaned = String(str).replace(/[$,\s]/g, '');
+      if (cleaned === '' || cleaned === '-' || cleaned === '.') return 0;
+      const n = parseFloat(cleaned);
+      return isFinite(n) ? n : 0;
+    }
+
+    // Live oninput: reformat with commas while keeping the cursor stable.
+    function onCurrencyInput(evt, nodeId, fieldName) {
+      const input = evt.target;
+      const raw = input.value;
+      // Save cursor position and count digits to the left of the caret.
+      const caret = input.selectionStart || 0;
+      const digitsBeforeCaret = raw.slice(0, caret).replace(/[^0-9\.\-]/g, '').length;
+
+      const num = parseCurrencyInput(raw);
+      const formatted = formatCurrencyInput(num);
+      input.value = formatted;
+
+      // Restore the caret at the same digit-index.
+      let newCaret = 0;
+      let seen = 0;
+      for (; newCaret < formatted.length; newCaret++) {
+        if (/[0-9\.\-]/.test(formatted[newCaret])) {
+          seen++;
+          if (seen >= digitsBeforeCaret) { newCaret++; break; }
+        }
+      }
+      try { input.setSelectionRange(newCaret, newCaret); } catch (e) { /* ignore */ }
+
+      // Push the cleaned numeric value into the node state and trigger recalc.
+      const node = nodes.find(n => n.id === nodeId);
+      if (node) {
+        node.fields[fieldName] = num;
+        scheduleCalculate();
+        saveState();
+      }
+    }
+
+    // On blur, canonicalize display (handles empty/invalid input).
+    function onCurrencyBlur(evt, nodeId, fieldName) {
+      const node = nodes.find(n => n.id === nodeId);
+      const num = node ? (node.fields[fieldName] || 0) : 0;
+      evt.target.value = formatCurrencyInput(num);
+    }
+
+    // ============ LIVE RECALC (debounced) ============
+    // Any change to fields or connections schedules a recalculation so the
+    // Summary nodes stay in sync without the user pressing Calculate.
+    let _recalcTimer = null;
+    let _suppressLiveRecalc = false; // set true during bulk state loads
+    function scheduleCalculate() {
+      if (_suppressLiveRecalc) return;
+      if (_recalcTimer) clearTimeout(_recalcTimer);
+      _recalcTimer = setTimeout(() => {
+        _recalcTimer = null;
+        // Silent recalc: no toasts, no confetti spam.
+        try { calculate({ silent: true }); } catch (e) { console.warn('live recalc failed', e); }
+      }, 120);
+    }
+
+    // Legacy shim: some older code paths still call markSummariesStale().
+    // With live recalc we don't need to dim; just schedule a fresh calc.
+    function markSummariesStale() { scheduleCalculate(); }
 
     // ============ CONNECTIONS ============
     // Get port position in CANVAS (unscaled) coordinates
@@ -1199,6 +1240,7 @@
           if (e.altKey || confirm('Delete this connection?')) {
             connections.splice(idx, 1);
             updateConnections();
+            scheduleCalculate();
             saveState();
           }
         });
@@ -1303,31 +1345,64 @@
     // ============ CALCULATION ============
     // Walk the directed chain starting from the Starting node, following
     // output -> input connections. Returns an ordered list of nodes.
+    // Topological sort of the NON-SUMMARY subgraph reachable from startNodeId.
+    //
+    // Summaries are pure observers -- they have no outgoing edges (enforced
+    // by nodeConfigs.summary.hasOutput = false), never mutate simulation
+    // state, and do not participate in the simulation walk. Each Summary
+    // renders its parent's post-processing snapshot (see calculate()).
     function getOrderedChain(startNodeId) {
+      const nodeById = new Map(nodes.map(n => [n.id, n]));
+
+      // Follow only edges into non-summary targets. Summaries are excluded
+      // entirely so deleting/adding a Summary NEVER changes the simulation.
+      const isSummary = id => (nodeById.get(id) || {}).type === 'summary';
+      const reachable = new Set();
+      (function walk(id) {
+        if (reachable.has(id) || isSummary(id)) return;
+        reachable.add(id);
+        connections.forEach(c => { if (c.from === id && !isSummary(c.to)) walk(c.to); });
+      })(startNodeId);
+
+      const inDeg = new Map();
+      reachable.forEach(id => inDeg.set(id, 0));
+      connections.forEach(c => {
+        if (reachable.has(c.from) && reachable.has(c.to)) {
+          inDeg.set(c.to, (inDeg.get(c.to) || 0) + 1);
+        }
+      });
+
+      const ready = [];
+      inDeg.forEach((deg, id) => { if (deg === 0) ready.push(id); });
+
       const order = [];
-      const visited = new Set();
-      const queue = [startNodeId];
-      while (queue.length) {
-        const current = queue.shift();
-        if (visited.has(current)) continue;
-        visited.add(current);
-        const node = nodes.find(n => n.id === current);
+      while (ready.length) {
+        const current = ready.shift();
+        const node = nodeById.get(current);
         if (!node) continue;
         order.push(node);
-        // Follow each outgoing edge in connection insertion order
-        connections.forEach(conn => {
-          if (conn.from === current && !visited.has(conn.to)) {
-            queue.push(conn.to);
+        connections.forEach(c => {
+          if (c.from === current && reachable.has(c.to)) {
+            const nd = (inDeg.get(c.to) || 0) - 1;
+            inDeg.set(c.to, nd);
+            if (nd === 0) ready.push(c.to);
           }
+        });
+      }
+      if (order.length !== reachable.size) {
+        console.warn('getOrderedChain: possible cycle; order incomplete', {
+          reached: reachable.size, ordered: order.length
         });
       }
       return order;
     }
 
-    function calculate() {
+    let _lastFireState = false;
+    function calculate(opts = {}) {
+      const silent = !!opts.silent;
       const startingNode = nodes.find(n => n.type === 'starting');
       if (!startingNode) {
-        showToast('⚠️ Please add a Starting Data node');
+        if (!silent) showToast('⚠️ Please add a Starting Data node');
         return;
       }
 
@@ -1349,6 +1424,7 @@
         totalTaxes: 0,
         totalSocialSecurity: 0,
         totalGrowth: 0,
+        totalInflationLoss: 0,
         yearlyData: [{
           age: startAge,
           balance: startCapital,
@@ -1404,21 +1480,20 @@
         }
 
         const annualReturn = m.fields.annualReturn / 100;
-        const monthlyReturn = annualReturn / 12;
         const inflationRate = m.fields.inflation / 100;
-        const taxRate = (m.fields.taxRate || 0) / 100;
         const monthlyIncomeRaw = m.fields.monthlyIncome;
         const monthlyExpensesRaw = m.fields.monthlyExpenses;
 
-        // Inflation factor is anchored to total years elapsed since simulation start
+        // "Real return" model (industry standard for retirement projections):
+        // effective growth rate = nominal return - inflation. This keeps dollars
+        // expressed in TODAY's purchasing power. Contributions stay nominal;
+        // the growth rate absorbs inflation.
+        //   $1000 at 9% return with 3% inflation grows to $1060 (net 6%).
+        const realReturnRate = annualReturn - inflationRate;
+
         for (let y = 0; y < years; y++) {
           sim.currentAge += 1;
           sim.yearsElapsed += 1;
-          const inflationFactor = Math.pow(1 + inflationRate, sim.yearsElapsed);
-          const inflatedExpenses = monthlyExpensesRaw * inflationFactor;
-          const afterTaxIncome = monthlyIncomeRaw * (1 - taxRate);
-          const yearTaxes = monthlyIncomeRaw * taxRate * 12;
-          sim.totalTaxes += yearTaxes;
 
           let monthlySS = 0;
           let yearSocial = 0;
@@ -1430,19 +1505,27 @@
             sim.totalSocialSecurity += yearSocial;
           }
 
-          let yearIncome = 0;
-          let yearExpenses = 0;
-          let yearGrowth = 0;
-          for (let month = 0; month < 12; month++) {
-            const before = sim.balance;
-            sim.balance = sim.balance * (1 + monthlyReturn);
-            yearGrowth += sim.balance - before;
-            sim.balance += afterTaxIncome + monthlySS - inflatedExpenses;
-            yearIncome += afterTaxIncome + monthlySS;
-            yearExpenses += inflatedExpenses;
-          }
-          sim.totalGrowth += yearGrowth;
-          sim.totalMonthlyContributions += afterTaxIncome * 12;
+          // Order: grow balance at real return, then add this year's net contribution.
+          const totalAnnualContribution = (monthlyIncomeRaw + monthlySS - monthlyExpensesRaw) * 12;
+          const beforeYear = sim.balance;
+          const balanceAfterReturn = sim.balance * (1 + realReturnRate);
+          const yearGrowth = balanceAfterReturn - sim.balance;
+          sim.balance = balanceAfterReturn + totalAnnualContribution;
+
+          // Book-keeping for the metrics panel:
+          //   "Investment Growth" reports real growth (post-inflation).
+          //   "Inflation Impact" reports the nominal-vs-real gap: what growth
+          //   would have been at nominal return minus what it was at real return.
+          const nominalGrowth = beforeYear * annualReturn;
+          const realGrowth = beforeYear * realReturnRate;
+          const inflationLoss = nominalGrowth - realGrowth;
+
+          const yearIncome = (monthlyIncomeRaw + monthlySS) * 12;
+          const yearExpenses = monthlyExpensesRaw * 12;
+
+          sim.totalGrowth += realGrowth;
+          sim.totalInflationLoss = (sim.totalInflationLoss || 0) + inflationLoss;
+          sim.totalMonthlyContributions += monthlyIncomeRaw * 12;
 
           if (sim.balance < 0 && sim.failedAtAge === null) sim.failedAtAge = sim.currentAge;
 
@@ -1452,26 +1535,52 @@
             income: yearIncome,
             expenses: yearExpenses,
             growth: yearGrowth,
-            taxes: yearTaxes,
+            taxes: 0,
             social: yearSocial
           });
         }
       }
 
-      // Snapshots written into summary nodes
-      const summarySnapshots = {};
+      // Per-node snapshots. Any Summary that hangs off a node will render
+      // that node's post-processing snapshot. Summaries themselves never
+      // participate in the walk (nodeConfigs.summary.hasOutput = false).
+      const nodeSnapshots = {};
+      const takeSnapshot = () => ({
+        currentAge: sim.currentAge,
+        currentCapital: sim.balance,
+        netChange: sim.balance - sim.startingBalance,
+        yearsElapsed: sim.yearsElapsed,
+        totalIncomes: sim.totalOneTimeIncome,
+        totalExpenses: sim.totalOneTimeExpenses,
+        monthlyCashFlow: sim.monthlyNode
+          ? (sim.monthlyNode.fields.monthlyIncome - sim.monthlyNode.fields.monthlyExpenses)
+          : null,
+        hasMonthly: !!sim.monthlyNode,
+        startAge: startAge,
+        startingBalance: sim.startingBalance,
+        finalBalance: sim.balance,
+        failedAtAge: sim.failedAtAge,
+        totalGrowth: sim.totalGrowth,
+        totalMonthlyContributions: sim.totalMonthlyContributions,
+        totalTaxes: sim.totalTaxes,
+        totalSocialSecurity: sim.totalSocialSecurity,
+        totalOneTimeIncome: sim.totalOneTimeIncome,
+        totalOneTimeExpenses: sim.totalOneTimeExpenses,
+        totalInflationLoss: sim.totalInflationLoss || 0,
+        yearlyData: sim.yearlyData.map(y => ({ ...y }))
+      });
+
+      // Snapshot the starting state before any nodes process.
+      nodeSnapshots[startingNode.id] = takeSnapshot();
 
       const chain = getOrderedChain(startingNode.id);
       chain.forEach(node => {
-        if (node.type === 'starting') {
-          // Already accounted for as the initial state
-          return;
-        } else if (node.type === 'expense') {
+        if (node.type === 'starting') return; // already snapshotted
+        if (node.type === 'expense') {
           sim.balance -= node.fields.amount;
           sim.totalOneTimeExpenses += node.fields.amount;
           sim.segmentOneTimeExpenses += node.fields.amount;
           if (sim.balance < 0 && sim.failedAtAge === null) sim.failedAtAge = sim.currentAge;
-          // Tag this onto the last yearly data row
           const last = sim.yearlyData[sim.yearlyData.length - 1];
           last.expenses += node.fields.amount;
           last.balance = sim.balance;
@@ -1488,25 +1597,20 @@
           simulateMonthlyYears(years);
         } else if (node.type === 'social') {
           sim.socialNode = node;
-        } else if (node.type === 'summary') {
-          // Snapshot current state
-          let monthlyCashFlow = null;
-          if (sim.monthlyNode) {
-            const taxRate = (sim.monthlyNode.fields.taxRate || 0) / 100;
-            const afterTaxIncome = sim.monthlyNode.fields.monthlyIncome * (1 - taxRate);
-            monthlyCashFlow = afterTaxIncome - sim.monthlyNode.fields.monthlyExpenses;
-          }
-          summarySnapshots[node.id] = {
-            currentAge: sim.currentAge,
-            currentCapital: sim.balance,
-            netChange: sim.balance - sim.startingBalance,
-            yearsElapsed: sim.yearsElapsed,
-            totalIncomes: sim.totalOneTimeIncome,
-            totalExpenses: sim.totalOneTimeExpenses,
-            monthlyCashFlow,
-            hasMonthly: !!sim.monthlyNode
-          };
         }
+        // Snapshot post-processing so any Summary hanging off this node can
+        // render the state right after this node applied its effect.
+        nodeSnapshots[node.id] = takeSnapshot();
+      });
+
+      // Resolve each Summary to its parent's snapshot.
+      const summarySnapshots = {};
+      nodes.forEach(n => {
+        if (n.type !== 'summary') return;
+        const parentEdge = connections.find(c => c.to === n.id);
+        if (!parentEdge) return;
+        const parentSnap = nodeSnapshots[parentEdge.from];
+        if (parentSnap) summarySnapshots[n.id] = parentSnap;
       });
 
       // Render summary nodes
@@ -1529,21 +1633,15 @@
         if (body) body.style.opacity = '1';
       });
 
-      displayResults({
-        startingBalance: startCapital,
-        finalBalance: sim.balance,
-        totalOneTimeIncome: sim.totalOneTimeIncome,
-        totalOneTimeExpenses: sim.totalOneTimeExpenses,
-        totalMonthlyContributions: sim.totalMonthlyContributions,
-        totalTaxes: sim.totalTaxes,
-        totalSocialSecurity: sim.totalSocialSecurity,
-        totalGrowth: sim.totalGrowth,
-        yearlyData: sim.yearlyData,
-        failedAtAge: sim.failedAtAge,
-        startAge,
-        monthlyNode: sim.monthlyNode,
-        socialNode: sim.socialNode
-      });
+      // Trigger confetti if any summary shows a FIRE-level success (final balance > 4x starting)
+      const anyFire = Object.values(summarySnapshots).some(s =>
+        s.failedAtAge === null && s.finalBalance > s.startingBalance * 4
+      );
+      // Only fire confetti on explicit Calculate clicks, or when the FIRE
+      // state flips from false -> true during live recalc. This keeps live
+      // updates quiet while still celebrating a genuine milestone.
+      if (anyFire && (!silent || !_lastFireState)) setTimeout(confetti, 100);
+      _lastFireState = anyFire;
     }
 
     function renderSummaryNode(nodeId, snap) {
@@ -1551,8 +1649,40 @@
       if (!body) return;
       const fmt = (n) => {
         const sign = n < 0 ? '-' : '';
+        const abs = Math.abs(n);
+        if (abs >= 1e9) return sign + '$' + (abs / 1e9).toFixed(2) + 'B';
+        if (abs >= 1e6) return sign + '$' + (abs / 1e6).toFixed(2) + 'M';
+        if (abs >= 1e3) return sign + '$' + (abs / 1e3).toFixed(1) + 'K';
+        return sign + '$' + Math.round(abs).toLocaleString();
+      };
+      const fmtFull = (n) => {
+        const sign = n < 0 ? '-' : '';
         return sign + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
       };
+
+      // Plan status card
+      let statusHTML;
+      if (snap.failedAtAge !== null) {
+        const yearsUntilFail = snap.failedAtAge - snap.startAge;
+        statusHTML = `
+          <div class="plan-status warning">
+            <div class="small">⚠️ Plan Fails</div>
+            <div class="big">Age ${snap.failedAtAge}</div>
+            <div class="small">${yearsUntilFail} years from start · Money runs out</div>
+          </div>
+        `;
+      } else {
+        const fireLevel = snap.finalBalance > snap.startingBalance * 4;
+        statusHTML = `
+          <div class="plan-status success">
+            <div class="small">${fireLevel ? '🔥 FIRE Achieved!' : '✅ Plan Sustained'}</div>
+            <div class="big">${fmt(snap.finalBalance)}</div>
+            <div class="small">Balance at age ${snap.currentAge}</div>
+          </div>
+        `;
+      }
+
+      // Key snapshot rows (kept from previous summary display)
       const netClass = snap.netChange > 0 ? 'positive' : (snap.netChange < 0 ? 'negative' : 'neutral');
       const cashFlowRow = snap.hasMonthly
         ? `<div class="summary-row">
@@ -1563,7 +1693,8 @@
              <span class="summary-label">Monthly Cash Flow</span>
              <span class="summary-value" style="color: var(--text-secondary); font-style: italic;">no monthly node yet</span>
            </div>`;
-      body.innerHTML = `
+
+      const summaryRowsHTML = `
         <div class="summary-row">
           <span class="summary-label">Current Age</span>
           <span class="summary-value neutral">${snap.currentAge}</span>
@@ -1580,17 +1711,110 @@
           <span class="summary-label">Years Elapsed</span>
           <span class="summary-value neutral">${snap.yearsElapsed}</span>
         </div>
-        <div class="summary-row">
-          <span class="summary-label">Total Incomes</span>
-          <span class="summary-value positive">${fmt(snap.totalIncomes)}</span>
-        </div>
-        <div class="summary-row">
-          <span class="summary-label">Total Expenses</span>
-          <span class="summary-value negative">${fmt(snap.totalExpenses)}</span>
-        </div>
         ${cashFlowRow}
-        <div class="summary-recalc-hint">Updates on Calculate</div>
       `;
+
+      // Detailed metrics (only rows with data)
+      let metricsHTML = `
+        <div class="result-metric">
+          <span class="metric-label">Starting Balance</span>
+          <span class="metric-value">${fmtFull(snap.startingBalance)}</span>
+        </div>
+        <div class="result-metric">
+          <span class="metric-label">Final Balance</span>
+          <span class="metric-value ${snap.finalBalance >= 0 ? 'positive' : 'negative'}">${fmtFull(snap.finalBalance)}</span>
+        </div>
+      `;
+      if (snap.totalGrowth > 0) {
+        metricsHTML += `
+          <div class="result-metric">
+            <span class="metric-label">Investment Growth</span>
+            <span class="metric-value positive">${fmtFull(snap.totalGrowth)}</span>
+          </div>`;
+      }
+      if (snap.totalMonthlyContributions > 0) {
+        metricsHTML += `
+          <div class="result-metric">
+            <span class="metric-label">Monthly Contributions</span>
+            <span class="metric-value positive">${fmtFull(snap.totalMonthlyContributions)}</span>
+          </div>`;
+      }
+      if (snap.totalTaxes > 0) {
+        metricsHTML += `
+          <div class="result-metric">
+            <span class="metric-label">Total Taxes Paid</span>
+            <span class="metric-value negative">${fmtFull(snap.totalTaxes)}</span>
+          </div>`;
+      }
+      if (snap.totalSocialSecurity > 0) {
+        metricsHTML += `
+          <div class="result-metric">
+            <span class="metric-label">Social Security Total</span>
+            <span class="metric-value positive">${fmtFull(snap.totalSocialSecurity)}</span>
+          </div>`;
+      }
+      if (snap.totalOneTimeIncome > 0) {
+        metricsHTML += `
+          <div class="result-metric">
+            <span class="metric-label">One-Time Income</span>
+            <span class="metric-value positive">${fmtFull(snap.totalOneTimeIncome)}</span>
+          </div>`;
+      }
+      if (snap.totalOneTimeExpenses > 0) {
+        metricsHTML += `
+          <div class="result-metric">
+            <span class="metric-label">One-Time Expenses</span>
+            <span class="metric-value negative">${fmtFull(snap.totalOneTimeExpenses)}</span>
+          </div>`;
+      }
+      if (snap.totalInflationLoss > 0) {
+        metricsHTML += `
+          <div class="result-metric">
+            <span class="metric-label">Inflation Impact</span>
+            <span class="metric-value negative">-${fmtFull(snap.totalInflationLoss)}</span>
+          </div>`;
+      }
+
+      // Chart + milestone table
+      const chartHTML = renderChart({
+        yearlyData: snap.yearlyData,
+        failedAtAge: snap.failedAtAge
+      });
+
+      let tableHTML = '';
+      if (snap.yearlyData && snap.yearlyData.length > 1) {
+        tableHTML = `
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Age</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        snap.yearlyData.forEach((row, idx) => {
+          if (idx % 5 === 0 || idx === snap.yearlyData.length - 1 || row.age === snap.failedAtAge) {
+            const cls = row.balance < 0 ? 'negative' : 'positive';
+            tableHTML += `
+              <tr>
+                <td>${row.age}</td>
+                <td class="${cls}">${fmtFull(row.balance)}</td>
+              </tr>
+            `;
+          }
+        });
+        tableHTML += '</tbody></table>';
+      }
+
+      body.innerHTML =
+        statusHTML +
+        summaryRowsHTML +
+        metricsHTML +
+        chartHTML +
+        tableHTML +
+        `<div class="summary-recalc-hint">⚡ Live — updates as you edit</div>`;
+
       // Connections need a redraw because the node may have grown taller
       requestAnimationFrame(() => updateConnections());
     }
@@ -1621,134 +1845,7 @@
       return result;
     }
 
-    // ============ RESULTS DISPLAY ============
-    function displayResults(data) {
-      const fmt = (n) => {
-        const sign = n < 0 ? '-' : '';
-        const abs = Math.abs(n);
-        if (abs >= 1e9) return sign + '$' + (abs / 1e9).toFixed(2) + 'B';
-        if (abs >= 1e6) return sign + '$' + (abs / 1e6).toFixed(2) + 'M';
-        if (abs >= 1e3) return sign + '$' + (abs / 1e3).toFixed(1) + 'K';
-        return sign + '$' + Math.round(abs).toLocaleString();
-      };
-      const fmtFull = (n) => {
-        const sign = n < 0 ? '-' : '';
-        return sign + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
-      };
-
-      let statusHTML;
-      if (data.failedAtAge !== null) {
-        const yearsUntilFail = data.failedAtAge - data.startAge;
-        statusHTML = `
-          <div class="plan-status warning">
-            <div class="small">⚠️ Plan Fails</div>
-            <div class="big">Age ${data.failedAtAge}</div>
-            <div class="small">${yearsUntilFail} years from now · Money runs out</div>
-          </div>
-        `;
-      } else {
-        const fireLevel = data.finalBalance > data.startingBalance * 4;
-        statusHTML = `
-          <div class="plan-status success">
-            <div class="small">${fireLevel ? '🔥 FIRE Achieved!' : '✅ Plan Sustained'}</div>
-            <div class="big">${fmt(data.finalBalance)}</div>
-            <div class="small">Final balance at age ${data.startAge + data.yearlyData.length - 1}</div>
-          </div>
-        `;
-        if (fireLevel) setTimeout(confetti, 100);
-      }
-
-      let metricsHTML = `
-        <div class="result-metric">
-          <span class="metric-label">Starting Balance</span>
-          <span class="metric-value">${fmtFull(data.startingBalance)}</span>
-        </div>
-        <div class="result-metric">
-          <span class="metric-label">Final Balance</span>
-          <span class="metric-value ${data.finalBalance >= 0 ? 'positive' : 'negative'}">${fmtFull(data.finalBalance)}</span>
-        </div>
-      `;
-
-      if (data.totalGrowth > 0) {
-        metricsHTML += `
-          <div class="result-metric">
-            <span class="metric-label">Investment Growth</span>
-            <span class="metric-value positive">${fmtFull(data.totalGrowth)}</span>
-          </div>
-        `;
-      }
-      if (data.totalMonthlyContributions > 0) {
-        metricsHTML += `
-          <div class="result-metric">
-            <span class="metric-label">After-Tax Contributions</span>
-            <span class="metric-value positive">${fmtFull(data.totalMonthlyContributions)}</span>
-          </div>
-        `;
-      }
-      if (data.totalTaxes > 0) {
-        metricsHTML += `
-          <div class="result-metric">
-            <span class="metric-label">Total Taxes Paid</span>
-            <span class="metric-value negative">${fmtFull(data.totalTaxes)}</span>
-          </div>
-        `;
-      }
-      if (data.totalSocialSecurity > 0) {
-        metricsHTML += `
-          <div class="result-metric">
-            <span class="metric-label">Social Security Total</span>
-            <span class="metric-value positive">${fmtFull(data.totalSocialSecurity)}</span>
-          </div>
-        `;
-      }
-      if (data.totalOneTimeIncome > 0) {
-        metricsHTML += `
-          <div class="result-metric">
-            <span class="metric-label">One-Time Income</span>
-            <span class="metric-value positive">${fmtFull(data.totalOneTimeIncome)}</span>
-          </div>
-        `;
-      }
-      if (data.totalOneTimeExpenses > 0) {
-        metricsHTML += `
-          <div class="result-metric">
-            <span class="metric-label">One-Time Expenses</span>
-            <span class="metric-value negative">${fmtFull(data.totalOneTimeExpenses)}</span>
-          </div>
-        `;
-      }
-
-      // Chart
-      const chartHTML = renderChart(data);
-
-      // Table - show key milestones
-      let tableHTML = `
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th>Age</th>
-              <th>Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      data.yearlyData.forEach((row, idx) => {
-        if (idx % 5 === 0 || idx === data.yearlyData.length - 1 || row.age === data.failedAtAge) {
-          const cls = row.balance < 0 ? 'negative' : 'positive';
-          tableHTML += `
-            <tr>
-              <td>${row.age}</td>
-              <td class="${cls}">${fmtFull(row.balance)}</td>
-            </tr>
-          `;
-        }
-      });
-      tableHTML += '</tbody></table>';
-
-      resultsContent.innerHTML = statusHTML + metricsHTML + chartHTML + tableHTML;
-      resultsPanel.classList.add('show');
-    }
-
+    // ============ CHART (shared by summary nodes) ============
     function renderChart(data) {
       const w = 380;
       const h = 200;
@@ -1841,10 +1938,6 @@
       `;
     }
 
-    function closeResults() {
-      resultsPanel.classList.remove('show');
-    }
-
     function clearAll() {
       if (confirm('Clear all nodes? This cannot be undone.')) {
         nodes = [];
@@ -1855,7 +1948,6 @@
         applyTransform();
         updateConnections();
         addNode('starting', 100, 100);
-        closeResults();
         localStorage.removeItem(STORAGE_KEY);
         saveState();
       }
