@@ -65,6 +65,9 @@
       color: var(--text-primary);
     }
 
+    .toolbar-spacer {
+      flex: 1 1 auto;
+    }
     .toolbar-divider {
       width: 1px;
       height: 32px;
@@ -969,7 +972,7 @@
     <button class="btn btn-node btn-monthly" onclick="addNode('monthly')">+ Monthly</button>
     <button class="btn btn-node btn-summary" onclick="addNode('summary')">+ Summary</button>
     <button class="btn btn-node btn-switch" onclick="addNode('switch')">+ Switch</button>
-    <div class="toolbar-divider"></div>
+    <div class="toolbar-spacer"></div>
     <button class="btn btn-project" onclick="toggleProjectsPanel()">Projects</button>
     <button class="btn btn-graph" onclick="toggleTimeline()">📈 Graph</button>
     <button class="btn btn-share" onclick="shareUrl()">Share</button>
@@ -2276,6 +2279,58 @@
     }
 
     // ============ CANVAS INTERACTION ============
+    // Compute the bounding box of all nodes and pan/zoom so the whole graph
+    // fits inside the visible canvas area (accounting for the toolbar at top
+    // and, if visible, the timeline panel at the bottom). Bound to F.
+    function frameAllNodes() {
+      if (!nodes.length) return;
+      // Bounding box in canvas (unscaled) coords using each node's rendered size.
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      nodes.forEach(n => {
+        const el = document.getElementById(n.id);
+        const w = el ? el.offsetWidth : 240;
+        const h = el ? el.offsetHeight : 120;
+        if (n.x < minX) minX = n.x;
+        if (n.y < minY) minY = n.y;
+        if (n.x + w > maxX) maxX = n.x + w;
+        if (n.y + h > maxY) maxY = n.y + h;
+      });
+      const graphW = maxX - minX;
+      const graphH = maxY - minY;
+      if (graphW <= 0 || graphH <= 0) return;
+
+      // Compute the visible viewport region inside canvasContainer, excluding
+      // the toolbar (top) and the timeline panel (bottom, if shown).
+      const containerRect = canvasContainer.getBoundingClientRect();
+      const timelineEl = document.getElementById('timelinePanel');
+      const timelineVisible = timelineEl && !timelineEl.classList.contains('hidden');
+      const timelineH = timelineVisible ? (timelineEl.offsetHeight + 24) : 24;
+      const padding = 60;
+      const availW = containerRect.width - padding * 2;
+      const availH = containerRect.height - padding - timelineH;
+      if (availW <= 0 || availH <= 0) return;
+
+      // Fit to width (per Matt's ask) but clamp so the graph also fits vertically.
+      const zoomFitWidth = availW / graphW;
+      const zoomFitHeight = availH / graphH;
+      const targetZoom = Math.min(zoomFitWidth, zoomFitHeight, 2);
+      // Respect the existing zoom floor (0.3, matching the wheel-zoom clamp).
+      zoom = Math.max(0.3, targetZoom);
+
+      // Center the bbox in the available region.
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      // Available region center in screen coords (relative to canvasContainer):
+      const screenCX = containerRect.width / 2;
+      const screenCY = padding + (availH / 2);
+      // We want:  canvasCenter * zoom + panOffset = screenCenter
+      panOffset.x = screenCX - centerX * zoom;
+      panOffset.y = screenCY - centerY * zoom;
+
+      applyTransform();
+      updateConnections();
+    }
+
     function applyTransform() {
       canvas.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`;
       canvasGrid.style.transform = `translate(${panOffset.x % (20 * zoom)}px, ${panOffset.y % (20 * zoom)}px) scale(${zoom})`;
@@ -3264,6 +3319,12 @@
 
       if (e.key === 'Escape') {
         selectNode(null);
+      }
+
+      // F -> auto-frame all nodes. Skip when typing in an input.
+      if ((e.key === 'f' || e.key === 'F') && !inField && !e.metaKey && !e.ctrlKey) {
+        frameAllNodes();
+        e.preventDefault();
       }
     });
 
