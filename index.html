@@ -1683,15 +1683,104 @@
     }
 
     function deleteNode(id) {
+      // Before we drop the node, capture its main-input predecessor(s) and
+      // main-output successor(s) so we can heal the chain around it.
+      const incoming = connections.filter(c => c.to === id && !c.toPort).map(c => c.from);
+      const outgoing = connections.filter(c => c.from === id && !getConnToPort(c)).map(c => c.to);
+
       const nodeEl = document.getElementById(id);
       if (nodeEl) nodeEl.remove();
       nodes = nodes.filter(n => n.id !== id);
       connections = connections.filter(c => c.from !== id && c.to !== id);
       selectedNodes.delete(id);
       if (selectedNode === id) selectedNode = null;
+
+      // Heal the chain: if the removed node had a single main-input predecessor
+      // and a single main-output successor, re-wire predecessor -> successor.
+      // Also handle 1->many and many->1 fan-outs sensibly (Cartesian product
+      // would be surprising; instead only heal the 1:1 case which is the
+      // common "delete an inline node" scenario).
+      if (incoming.length === 1 && outgoing.length === 1 &&
+          incoming[0] !== outgoing[0]) {
+        const from = incoming[0], to = outgoing[0];
+        const dup = connections.some(c => c.from === from && c.to === to && !c.toPort);
+        if (!dup) connections.push({ from, to });
+      }
+
       updateConnections();
       scheduleCalculate();
       saveState();
+    }
+
+    // Small helper so the delete-heal code above is easy to read.
+    function getConnToPort(c) { return c.toPort || null; }
+
+    // Bezier point at parameter t ∈ [0,1] between (x1,y1) and (x2,y2) using
+    // the same control tangents as getBezierPath (horizontal-out, horizontal-in).
+    function bezierPointAt(x1, y1, x2, y2, t) {
+      const dx = Math.abs(x2 - x1);
+      const cp = Math.min(Math.max(dx * 0.5, 50), 200);
+      const cx1 = x1 + cp, cy1 = y1;
+      const cx2 = x2 - cp, cy2 = y2;
+      const mt = 1 - t;
+      const x = mt*mt*mt*x1 + 3*mt*mt*t*cx1 + 3*mt*t*t*cx2 + t*t*t*x2;
+      const y = mt*mt*mt*y1 + 3*mt*mt*t*cy1 + 3*mt*t*t*cy2 + t*t*t*y2;
+      return { x, y };
+    }
+
+    // If nodeId's bbox intersects a main-flow (non-alt) connection line,
+    // splice the node into that connection: remove A->B and add A->node,
+    // node->B. Only fires for node types that have BOTH input and output
+    // (so a bare Summary or Starting won't splice).
+    // Returns true if a splice happened.
+    function trySpliceOntoConnection(nodeId) {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return false;
+      const cfg = nodeConfigs[node.type];
+      if (!cfg || !cfg.hasInput || !cfg.hasOutput) return false;
+
+      const el = document.getElementById(nodeId);
+      if (!el) return false;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const bbox = { x1: node.x, y1: node.y, x2: node.x + w, y2: node.y + h };
+      const cx = node.x + w / 2, cy = node.y + h / 2;
+
+      // Skip connections that already touch this node -- don't splice into
+      // our own edges.
+      const candidates = connections.filter(c =>
+        !c.toPort && c.from !== nodeId && c.to !== nodeId
+      );
+
+      let best = null; // { connIdx, dist }
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
+        const from = getPortPosition(c.from, 'output');
+        const to = getPortPosition(c.to, 'input');
+        if (!from || !to) continue;
+        // Sample 20 points along the bezier.
+        for (let s = 1; s < 20; s++) {
+          const t = s / 20;
+          const p = bezierPointAt(from.x, from.y, to.x, to.y, t);
+          if (p.x >= bbox.x1 && p.x <= bbox.x2 && p.y >= bbox.y1 && p.y <= bbox.y2) {
+            const dx = p.x - cx, dy = p.y - cy;
+            const dist = dx*dx + dy*dy;
+            const realIdx = connections.indexOf(c);
+            if (!best || dist < best.dist) best = { connIdx: realIdx, dist, from: c.from, to: c.to };
+            break; // this connection is a hit; move on to check others
+          }
+        }
+      }
+
+      if (!best) return false;
+      // Splice: remove the matched connection, add A -> node and node -> B.
+      connections.splice(best.connIdx, 1);
+      connections.push({ from: best.from, to: nodeId });
+      connections.push({ from: nodeId, to: best.to });
+      updateConnections();
+      scheduleCalculate();
+      saveState();
+      return true;
     }
 
     function deleteSelectedNodes() {
@@ -2191,6 +2280,15 @@
           dragGroup.forEach(g => {
             const gel = document.getElementById(g.id);
             if (gel) gel.classList.remove('dragging');
+          });
+          // Splice-on-drop: if any dragged node is currently orphan (no main
+          // in/out connections) and its bbox overlaps a connection line,
+          // splice it into that connection.
+          const draggedIds = dragGroup.length ? dragGroup.map(g => g.id) : [draggingNode];
+          draggedIds.forEach(id => {
+            const hasMainConn = connections.some(c =>
+              (c.from === id && !c.toPort) || (c.to === id && !c.toPort));
+            if (!hasMainConn) trySpliceOntoConnection(id);
           });
           dragGroup = [];
           saveState();
