@@ -910,6 +910,53 @@
       color: var(--text-secondary);
       font-size: 11px;
     }
+
+    .timeline-chart { position: relative; cursor: crosshair; }
+    .timeline-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .timeline-crosshair {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--border-selected);
+      box-shadow: 0 0 6px rgba(88, 166, 255, 0.6);
+      display: none;
+      pointer-events: none;
+    }
+    .timeline-readout {
+      position: absolute;
+      top: 10px;
+      background: rgba(13, 17, 23, 0.9);
+      border: 1px solid var(--border-selected);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: var(--text-primary);
+      display: none;
+      pointer-events: none;
+      min-width: 120px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .tl-readout-year {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--border-selected);
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+    .tl-readout-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 10px;
+    }
+    .tl-readout-row span { color: var(--text-secondary); }
+    .tl-readout-row b { color: var(--text-primary); font-weight: 700; }
   </style>
 </head>
 <body>
@@ -920,11 +967,9 @@
     <button class="btn btn-node btn-expense" onclick="addNode('expense')">+ Expense</button>
     <button class="btn btn-node btn-income" onclick="addNode('income')">+ Income</button>
     <button class="btn btn-node btn-monthly" onclick="addNode('monthly')">+ Monthly</button>
-    <button class="btn btn-node btn-social" onclick="addNode('social')">+ Social Security</button>
     <button class="btn btn-node btn-summary" onclick="addNode('summary')">+ Summary</button>
     <button class="btn btn-node btn-switch" onclick="addNode('switch')">+ Switch</button>
     <div class="toolbar-divider"></div>
-    <button class="btn btn-calculate" onclick="calculate()">Calculate</button>
     <button class="btn btn-project" onclick="toggleProjectsPanel()">Projects</button>
     <button class="btn btn-graph" onclick="toggleTimeline()">📈 Graph</button>
     <button class="btn btn-share" onclick="shareUrl()">Share</button>
@@ -2694,11 +2739,25 @@
 
     // ============ Bottom Timeline Panel ============
     let _timelineVisible = true;
+    // Last-rendered projection data + starting-year metadata, used by the
+    // hover crosshair to look up the balance at a given mouse position.
+    let _timelineData = null; // { yearly, failedAtAge, startCalendarYear, startAge }
+
     function toggleTimeline() {
       _timelineVisible = !_timelineVisible;
       const panel = document.getElementById('timelinePanel');
       if (panel) panel.classList.toggle('hidden', !_timelineVisible);
       try { localStorage.setItem('retirement-calc-timeline-visible', _timelineVisible ? '1' : '0'); } catch (e) {}
+    }
+
+    // Money formatter (short) shared by the badge + crosshair readout.
+    function _tlFmt(n) {
+      const sign = n < 0 ? '-' : '';
+      const a = Math.abs(n);
+      if (a >= 1e9) return sign + '$' + (a/1e9).toFixed(2) + 'B';
+      if (a >= 1e6) return sign + '$' + (a/1e6).toFixed(2) + 'M';
+      if (a >= 1e3) return sign + '$' + (a/1e3).toFixed(0) + 'K';
+      return sign + '$' + Math.round(a);
     }
 
     function updateTimeline(nodeSnapshots, sim, startAge) {
@@ -2708,25 +2767,108 @@
 
       const yearly = sim && sim.yearlyData ? sim.yearlyData : [];
       if (!yearly.length || yearly.length < 2) {
-        chartEl.innerHTML = `<div class="timeline-empty">Add a Monthly Finances node (or Social Security) so a projection can be drawn.</div>`;
+        chartEl.innerHTML = `<div class="timeline-empty">Add a Monthly Finances node so a projection can be drawn.</div>`;
         if (badgeEl) badgeEl.textContent = '';
+        _timelineData = null;
         return;
       }
-
-      const fmt = (n) => {
-        const sign = n < 0 ? '-' : '';
-        const a = Math.abs(n);
-        if (a >= 1e9) return sign + '$' + (a/1e9).toFixed(2) + 'B';
-        if (a >= 1e6) return sign + '$' + (a/1e6).toFixed(2) + 'M';
-        if (a >= 1e3) return sign + '$' + (a/1e3).toFixed(0) + 'K';
-        return sign + '$' + Math.round(a);
-      };
 
       chartEl.innerHTML = renderChart({ yearlyData: yearly, failedAtAge: sim.failedAtAge }, { wide: true });
       if (badgeEl) {
         const last = yearly[yearly.length - 1];
-        badgeEl.textContent = `Age ${last.age} → ${fmt(last.balance)}`;
+        badgeEl.textContent = `Age ${last.age} → ${_tlFmt(last.balance)}`;
       }
+
+      // Cache data for the hover crosshair. startCalendarYear = the calendar
+      // year that corresponds to sim.currentAge = startAge (i.e. "today").
+      _timelineData = {
+        yearly,
+        failedAtAge: sim.failedAtAge,
+        startCalendarYear: new Date().getFullYear(),
+        startAge
+      };
+
+      // Add or refresh the crosshair overlay SVG.
+      installTimelineCrosshair();
+    }
+
+    function installTimelineCrosshair() {
+      const chartEl = document.getElementById('timelineChart');
+      if (!chartEl) return;
+
+      // Reset the overlay each render (chart's innerHTML was just replaced).
+      let overlay = document.getElementById('timelineOverlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'timelineOverlay';
+        overlay.className = 'timeline-overlay';
+        overlay.innerHTML = `
+          <div class="timeline-crosshair" id="timelineCrosshair"></div>
+          <div class="timeline-readout" id="timelineReadout"></div>
+        `;
+        chartEl.appendChild(overlay);
+      } else {
+        // Move it to the end so it sits above the freshly rendered chart.
+        chartEl.appendChild(overlay);
+      }
+
+      const readout = overlay.querySelector('#timelineReadout');
+      const line = overlay.querySelector('#timelineCrosshair');
+
+      const hide = () => {
+        line.style.display = 'none';
+        readout.style.display = 'none';
+      };
+      hide();
+
+      chartEl.onmousemove = (e) => {
+        if (!_timelineData || !_timelineData.yearly.length) { hide(); return; }
+        const rect = chartEl.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const w = rect.width;
+        if (mx < 0 || mx > w) { hide(); return; }
+
+        // The SVG uses preserveAspectRatio="none" with a viewBox padding of
+        // pad.l=50, pad.r=10 in wide mode (w=1200). Map the mouseX back to
+        // an age proportionally accounting for that padding in the SVG space.
+        const vbW = 1200;
+        const padL = 50, padR = 10;
+        const svgX = (mx / w) * vbW;
+        const innerX = Math.max(0, Math.min(vbW - padL - padR, svgX - padL));
+        const innerW = vbW - padL - padR;
+
+        const yearly = _timelineData.yearly;
+        const firstAge = yearly[0].age;
+        const lastAge = yearly[yearly.length - 1].age;
+        const ageRange = Math.max(1, lastAge - firstAge);
+        const hoveredAge = firstAge + (innerX / innerW) * ageRange;
+        const nearest = yearly.reduce((best, row) =>
+          Math.abs(row.age - hoveredAge) < Math.abs(best.age - hoveredAge) ? row : best,
+          yearly[0]);
+
+        // Position the crosshair line at the mouseX (clamped inside the
+        // padded region so it doesn't stick out over the Y labels).
+        const leftPx = Math.max(w * padL / vbW, Math.min(w * (vbW - padR) / vbW, mx));
+        line.style.left = leftPx + 'px';
+        line.style.display = 'block';
+
+        // Compose the readout: Date (Month YYYY), Age N, $Balance.
+        const yearsFromStart = nearest.age - _timelineData.startAge;
+        const calendarYear = _timelineData.startCalendarYear + yearsFromStart;
+        readout.innerHTML = `
+          <div class="tl-readout-year">${calendarYear}</div>
+          <div class="tl-readout-row"><span>Age</span><b>${nearest.age}</b></div>
+          <div class="tl-readout-row"><span>Balance</span><b>${_tlFmt(nearest.balance)}</b></div>
+        `;
+        // Position the readout to the right of the line, or flip left if
+        // it would run off the right edge.
+        readout.style.display = 'block';
+        const readoutW = readout.offsetWidth || 120;
+        const desired = leftPx + 12;
+        readout.style.left = (desired + readoutW > w - 8 ? leftPx - readoutW - 12 : desired) + 'px';
+      };
+
+      chartEl.onmouseleave = hide;
     }
 
     function getConnectedNodes(startNodeId) {
