@@ -90,7 +90,16 @@
       text-transform: uppercase;
       letter-spacing: 2px;
       color: var(--text-primary);
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      padding: 4px 6px;
+      margin: -4px -6px;
+      border-radius: 8px;
+      transition: background 0.12s ease, opacity 0.12s ease;
     }
+    .toolbar-title:hover { background: rgba(255,255,255,0.06); }
+    .toolbar-title:active { opacity: 0.7; }
 
     .toolbar-logo {
       height: 28px;
@@ -289,6 +298,7 @@
       border: 2px solid var(--border-default);
       border-radius: 12px;
       padding: 16px;
+      padding-bottom: 28px; /* room for the age-range badge pinned to the bottom */
       min-width: 240px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.4);
       cursor: grab;
@@ -296,6 +306,27 @@
       transition: box-shadow 0.15s ease, border-color 0.15s ease;
       touch-action: none;
     }
+
+    /* Age-range badge pinned to the bottom edge of every node. Populated by
+       calculate() with each node's entry/exit age in the simulated timeline. */
+    .node-age-badge {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0.75;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .node-age-badge.empty { opacity: 0.35; }
 
     .node:hover {
       box-shadow: 0 8px 24px rgba(0,0,0,0.5);
@@ -1011,7 +1042,8 @@
 </head>
 <body>
   <div class="toolbar">
-    <div class="toolbar-title">
+    <div class="toolbar-title" onclick="frameAllNodes()" title="Frame all nodes (F)" role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){frameAllNodes();event.preventDefault();}">
       <img class="toolbar-logo" src="assets/iBelieveInSwordfish_Logo_TwoTone_Dark.webp" alt="iBelieveInSwordfish">
       <span>FiCalc</span>
     </div>
@@ -1665,6 +1697,7 @@
           ${canDelete ? `<button class="node-delete" onclick="deleteNode('${nodeData.id}')">×</button>` : ''}
         </div>
         ${fieldsHTML}
+        <div class="node-age-badge empty" id="age-badge-${nodeData.id}">—</div>
       `;
 
       // Dragging - use canvas coordinates (pointer events -> mouse+touch+pen)
@@ -2821,6 +2854,12 @@
         yearlyData: sim.yearlyData.map(y => ({ ...y }))
       });
 
+      // Per-node age range: { entryAge, exitAge } captured around applyNode().
+      // Instant nodes (expense/income/social/summary) get entry == exit.
+      // Monthly nodes span multiple years.
+      const nodeAgeRanges = {};
+      nodeAgeRanges[startingNode.id] = { entryAge: startAge, exitAge: startAge };
+
       // Snapshot the starting state before any nodes process.
       nodeSnapshots[startingNode.id] = takeSnapshot();
 
@@ -2867,11 +2906,24 @@
       const chain = getOrderedChain(startingNode.id);
       chain.forEach(node => {
         if (node.type === 'starting') return; // already snapshotted
+        const entryAge = sim.currentAge;
         applyNode(node);
+        nodeAgeRanges[node.id] = { entryAge, exitAge: sim.currentAge };
         // Snapshot post-processing so any Summary hanging off this node can
         // render the state right after this node applied its effect.
         nodeSnapshots[node.id] = takeSnapshot();
       });
+
+      // Summary nodes inherit their parent's exit age (they observe, not advance).
+      nodes.forEach(n => {
+        if (n.type !== 'summary') return;
+        const parentEdge = connections.find(c => c.to === n.id);
+        if (!parentEdge) return;
+        const p = nodeAgeRanges[parentEdge.from];
+        if (p) nodeAgeRanges[n.id] = { entryAge: p.exitAge, exitAge: p.exitAge };
+      });
+
+      renderAgeBadges(nodeAgeRanges);
 
       // Resolve each Summary to its parent's snapshot.
       const summarySnapshots = {};
@@ -2912,6 +2964,27 @@
       // updates quiet while still celebrating a genuine milestone.
       if (anyFire && (!silent || !_lastFireState)) setTimeout(confetti, 100);
       _lastFireState = anyFire;
+    }
+
+    // Update the age badge at the bottom of every node from the per-node
+    // { entryAge, exitAge } map produced by calculate(). Nodes not in the
+    // active flow (dangling / disconnected) get a dim '—'.
+    function renderAgeBadges(ageRanges) {
+      const fmt = (a) => Math.round(a);
+      nodes.forEach(n => {
+        const badge = document.getElementById('age-badge-' + n.id);
+        if (!badge) return;
+        const range = ageRanges[n.id];
+        if (!range) {
+          badge.textContent = '—';
+          badge.classList.add('empty');
+          return;
+        }
+        const a = fmt(range.entryAge);
+        const b = fmt(range.exitAge);
+        badge.textContent = (a === b) ? `Age ${a}` : `Age ${a} – ${b}`;
+        badge.classList.remove('empty');
+      });
     }
 
     function renderSummaryNode(nodeId, snap) {
