@@ -1360,8 +1360,9 @@
           }
         }
 
-        // Fresh start
-        addNode('starting', 100, 100);
+        // Fresh start (no URL hash, no saved project): build the default
+        // 3-node layout so first-time visitors see something meaningful.
+        buildDefaultProject();
         setupCanvasInteraction();
       } finally {
         _suppressLiveRecalc = false;
@@ -3384,10 +3385,50 @@
         zoom = 1;
         applyTransform();
         updateConnections();
-        addNode('starting', 100, 100);
         localStorage.removeItem(STORAGE_KEY);
+        // Reset -> default 3-node project, not a bare Starting node.
+        buildDefaultProject();
         saveState();
       }
+    }
+
+    // Build the canonical starter project: Starting Data ($100K) ->
+    // Monthly Finances ($10K income, $7K expenses, 8% return, 3% inflation,
+    // 10 years) -> Summary. Called from init() on a fresh session and from
+    // clearAll() when the user resets. Bypasses addNode()'s auto-connect /
+    // selection heuristics so positions are deterministic.
+    function buildDefaultProject() {
+      const mkId = (suffix) => 'node-' + Date.now() + '-' + suffix + '-' + Math.random().toString(36).slice(2, 6);
+
+      const startingId = mkId('start');
+      const monthlyId  = mkId('mon');
+      const summaryId  = mkId('sum');
+
+      // Grid-snapped positions (matches addNode's 20px grid).
+      nodes.push({
+        id: startingId, type: 'starting', x: 100, y: 120,
+        fields: { capital: 100000, age: 30 }
+      });
+      nodes.push({
+        id: monthlyId, type: 'monthly', x: 440, y: 120,
+        fields: {
+          monthlyIncome: 10000,
+          monthlyExpenses: 7000,
+          annualReturn: 8,
+          inflation: 3,
+          years: 10
+        }
+      });
+      nodes.push({
+        id: summaryId, type: 'summary', x: 780, y: 120,
+        fields: {}
+      });
+
+      connections.push({ from: startingId, to: monthlyId });
+      connections.push({ from: monthlyId,  to: summaryId  });
+
+      renderAll();
+      // Graph is on by default (_timelineVisible = true); no explicit toggle needed.
     }
 
     // ============ CONFETTI ============
