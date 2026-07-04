@@ -443,6 +443,27 @@
       border-top: 4px solid var(--accent-summary);
       min-width: 380px;
     }
+    /* The Summary whose branch drives the bottom graph gets a glowing outline
+       and a "📈 Graph" marker so it's obvious which outcome is being plotted. */
+    .node[data-type="summary"].graph-focus {
+      box-shadow: 0 0 0 2px var(--accent-summary), 0 8px 28px rgba(163, 113, 247, 0.45);
+    }
+    .node[data-type="summary"].graph-focus::before {
+      content: '📈 Graph';
+      position: absolute;
+      top: -12px;
+      right: 12px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      background: var(--accent-summary);
+      color: #fff;
+      padding: 3px 8px;
+      border-radius: 10px;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 1;
+    }
     .node[data-type="switch"] {
       border-top: 4px solid var(--accent-switch);
       min-width: 260px;
@@ -1724,6 +1745,11 @@
         // selection with just this node.
         if (!selectedNodes.has(nodeData.id)) selectNode(nodeData.id);
 
+        // Clicking a Summary node focuses the graph on that branch.
+        if (nodeData.type === 'summary' && nodeData.id !== _focusedSummaryId) {
+          setFocusedSummary(nodeData.id);
+        }
+
         // Option-drag duplicates the selection BEFORE starting the drag, then
         // drags ONLY the freshly-created copies (the originals stay put).
         // duplicateSelectedNodes() sets the selection to the new copy ids, so
@@ -2681,20 +2707,76 @@
       return order;
     }
 
-    let _lastFireState = false;
-    function calculate(opts = {}) {
-      const silent = !!opts.silent;
-      const startingNode = nodes.find(n => n.type === 'starting');
-      if (!startingNode) {
-        if (!silent) showToast('⚠️ Please add a Starting Data node');
-        return;
+    // Ancestor chain leading to a specific target node id, topologically
+    // ordered from the Starting node down. Excludes the target itself when
+    // targetIsSummary=true (Summaries are pure observers and don't participate
+    // in the sim walk). Only main edges (no toPort) propagate.
+    //
+    // Used by calculate() to run one independent simulation per Summary so
+    // forked plans (Starting -> A -> Summary1; Starting -> B -> Summary2)
+    // score each branch correctly instead of smushing both into one sim.
+    function getAncestorChain(targetId, opts = {}) {
+      const targetIsSummary = !!opts.targetIsSummary;
+      const nodeById = new Map(nodes.map(n => [n.id, n]));
+      const isMainEdge = c => !c.toPort;
+      const isSummary = id => (nodeById.get(id) || {}).type === 'summary';
+
+      // Walk backwards from target across main edges to find every ancestor.
+      const ancestors = new Set();
+      (function walkBack(id) {
+        if (ancestors.has(id)) return;
+        ancestors.add(id);
+        connections.forEach(c => {
+          if (c.to === id && isMainEdge(c)) walkBack(c.from);
+        });
+      })(targetId);
+
+      // Drop the target from the sim set if it's a Summary (observer only).
+      // Also drop any OTHER summaries that happen to sit in the ancestor set
+      // (shouldn't happen since summaries have no output, but defensively).
+      if (targetIsSummary) ancestors.delete(targetId);
+      [...ancestors].forEach(id => { if (isSummary(id) && id !== targetId) ancestors.delete(id); });
+
+      // Topological sort restricted to the ancestor subgraph.
+      const inDeg = new Map();
+      ancestors.forEach(id => inDeg.set(id, 0));
+      connections.forEach(c => {
+        if (isMainEdge(c) && ancestors.has(c.from) && ancestors.has(c.to)) {
+          inDeg.set(c.to, (inDeg.get(c.to) || 0) + 1);
+        }
+      });
+      const ready = [];
+      inDeg.forEach((deg, id) => { if (deg === 0) ready.push(id); });
+      const order = [];
+      while (ready.length) {
+        const current = ready.shift();
+        const node = nodeById.get(current);
+        if (!node) continue;
+        order.push(node);
+        connections.forEach(c => {
+          if (c.from === current && isMainEdge(c) && ancestors.has(c.to)) {
+            const nd = (inDeg.get(c.to) || 0) - 1;
+            inDeg.set(c.to, nd);
+            if (nd === 0) ready.push(c.to);
+          }
+        });
       }
+      return order;
+    }
+
+    // Run one independent simulation across an ordered chain of nodes.
+    // Returns { sim, nodeSnapshots, nodeAgeRanges } — a pure snapshot; caller
+    // is responsible for painting UI. Extracted so calculate() can run this
+    // once per Summary (branch-scoped) instead of once for the whole graph.
+    function runSimulation(chain) {
+      const startingNode = chain.find(n => n.type === 'starting');
+      if (!startingNode) return null;
 
       const startCapital = startingNode.fields.capital;
       const startAge = startingNode.fields.age;
 
-      // Running simulation state
       const sim = {
+        _startAge: startAge,
         balance: startCapital,
         currentAge: startAge,
         yearsElapsed: 0,
@@ -2725,8 +2807,6 @@
         startingBalance: startCapital
       };
 
-      // Helper: simulate `years` years of monthly compounding using the
-      // currently-active monthly + social config. Mutates sim.
       function simulateMonthlyYears(years) {
         const m = sim.monthlyNode;
         if (!m || years <= 0) {
@@ -2825,9 +2905,6 @@
         }
       }
 
-      // Per-node snapshots. Any Summary that hangs off a node will render
-      // that node's post-processing snapshot. Summaries themselves never
-      // participate in the walk (nodeConfigs.summary.hasOutput = false).
       const nodeSnapshots = {};
       const takeSnapshot = () => ({
         currentAge: sim.currentAge,
@@ -2854,18 +2931,10 @@
         yearlyData: sim.yearlyData.map(y => ({ ...y }))
       });
 
-      // Per-node age range: { entryAge, exitAge } captured around applyNode().
-      // Instant nodes (expense/income/social/summary) get entry == exit.
-      // Monthly nodes span multiple years.
       const nodeAgeRanges = {};
       nodeAgeRanges[startingNode.id] = { entryAge: startAge, exitAge: startAge };
-
-      // Snapshot the starting state before any nodes process.
       nodeSnapshots[startingNode.id] = takeSnapshot();
 
-      // Apply one node's effect to the simulation. Switch nodes proxy their
-      // currently-active alt-input source: they behave as if that source's
-      // type + fields were the node here in the chain.
       function applyNode(node) {
         let effective = node;
         if (node.type === 'switch') {
@@ -2903,38 +2972,118 @@
         }
       }
 
-      const chain = getOrderedChain(startingNode.id);
       chain.forEach(node => {
-        if (node.type === 'starting') return; // already snapshotted
+        if (node.type === 'starting') return;
         const entryAge = sim.currentAge;
         applyNode(node);
         nodeAgeRanges[node.id] = { entryAge, exitAge: sim.currentAge };
-        // Snapshot post-processing so any Summary hanging off this node can
-        // render the state right after this node applied its effect.
         nodeSnapshots[node.id] = takeSnapshot();
       });
 
-      // Summary nodes inherit their parent's exit age (they observe, not advance).
-      nodes.forEach(n => {
-        if (n.type !== 'summary') return;
-        const parentEdge = connections.find(c => c.to === n.id);
-        if (!parentEdge) return;
-        const p = nodeAgeRanges[parentEdge.from];
-        if (p) nodeAgeRanges[n.id] = { entryAge: p.exitAge, exitAge: p.exitAge };
+      return { sim, nodeSnapshots, nodeAgeRanges, startAge };
+    }
+
+    let _lastFireState = false;
+    // The Summary whose branch drives the graph. Persisted across reloads.
+    // null = no Summary chosen (graph uses the full-walk fallback).
+    let _focusedSummaryId = null;
+    try { _focusedSummaryId = localStorage.getItem('retirement-calc-focused-summary') || null; } catch (e) {}
+
+    function setFocusedSummary(id) {
+      _focusedSummaryId = id || null;
+      try {
+        if (_focusedSummaryId) localStorage.setItem('retirement-calc-focused-summary', _focusedSummaryId);
+        else localStorage.removeItem('retirement-calc-focused-summary');
+      } catch (e) {}
+      // Repaint focus rings on all Summary nodes.
+      document.querySelectorAll('.node[data-type="summary"]').forEach(el => {
+        el.classList.toggle('graph-focus', el.id === _focusedSummaryId);
       });
+      scheduleCalculate();
+    }
 
-      renderAgeBadges(nodeAgeRanges, nodeSnapshots);
+    function calculate(opts = {}) {
+      const silent = !!opts.silent;
+      const startingNode = nodes.find(n => n.type === 'starting');
+      if (!startingNode) {
+        if (!silent) showToast('⚠️ Please add a Starting Data node');
+        return;
+      }
 
-      // Resolve each Summary to its parent's snapshot.
+      // Collect all Summaries that have a valid parent edge feeding them.
+      const summaries = nodes.filter(n => n.type === 'summary' &&
+        connections.some(c => c.to === n.id && !c.toPort));
+
+      // Per-node aggregate maps that the UI will read from.
+      const mergedSnapshots = {};
+      const mergedAgeRanges = {};
       const summarySnapshots = {};
-      nodes.forEach(n => {
-        if (n.type !== 'summary') return;
-        const parentEdge = connections.find(c => c.to === n.id);
-        if (!parentEdge) return;
-        const parentSnap = nodeSnapshots[parentEdge.from];
-        if (parentSnap) summarySnapshots[n.id] = parentSnap;
+
+      // If no Summaries exist yet (fresh canvas / scratchpad), fall back to
+      // the single full-walk sim so people can still see live numbers before
+      // they add a Summary node.
+      let graphSim = null;
+      let graphStartAge = startingNode.fields.age;
+
+      if (summaries.length === 0) {
+        const chain = getOrderedChain(startingNode.id);
+        const result = runSimulation(chain);
+        if (result) {
+          Object.assign(mergedSnapshots, result.nodeSnapshots);
+          Object.assign(mergedAgeRanges, result.nodeAgeRanges);
+          graphSim = result.sim;
+          graphStartAge = result.startAge;
+        }
+      } else {
+        // One independent sim per Summary. The focused Summary's sim also
+        // drives the graph. Ties broken by first Summary in nodes[] order.
+        let focused = summaries.find(s => s.id === _focusedSummaryId);
+        if (!focused) focused = summaries[0];
+        // Fix up the persisted focus if it pointed at a deleted Summary.
+        if (focused.id !== _focusedSummaryId) _focusedSummaryId = focused.id;
+
+        summaries.forEach(summary => {
+          const chain = getAncestorChain(summary.id, { targetIsSummary: true });
+          const result = runSimulation(chain);
+          if (!result) return;
+
+          // Summary's own snapshot = its parent's final snapshot (observer pattern).
+          const parentEdge = connections.find(c => c.to === summary.id && !c.toPort);
+          if (parentEdge) {
+            const parentSnap = result.nodeSnapshots[parentEdge.from];
+            if (parentSnap) {
+              summarySnapshots[summary.id] = parentSnap;
+              mergedSnapshots[summary.id] = parentSnap;
+              const pr = result.nodeAgeRanges[parentEdge.from];
+              if (pr) mergedAgeRanges[summary.id] = { entryAge: pr.exitAge, exitAge: pr.exitAge };
+            }
+          }
+
+          // Merge per-node snapshots + age ranges. The focused Summary wins
+          // for shared ancestors so the badges reflect its branch's numbers.
+          const isFocused = summary.id === _focusedSummaryId;
+          Object.entries(result.nodeSnapshots).forEach(([nid, snap]) => {
+            if (isFocused || !(nid in mergedSnapshots)) mergedSnapshots[nid] = snap;
+          });
+          Object.entries(result.nodeAgeRanges).forEach(([nid, r]) => {
+            if (isFocused || !(nid in mergedAgeRanges)) mergedAgeRanges[nid] = r;
+          });
+
+          if (isFocused) {
+            graphSim = result.sim;
+            graphStartAge = result.startAge;
+          }
+        });
+      }
+
+      renderAgeBadges(mergedAgeRanges, mergedSnapshots);
+
+      // Paint the focus ring on the currently-focused Summary; clear it on others.
+      document.querySelectorAll('.node[data-type="summary"]').forEach(el => {
+        el.classList.toggle('graph-focus', !!_focusedSummaryId && el.id === _focusedSummaryId);
       });
 
+      // Render each Summary body from its own branch sim.
       Object.entries(summarySnapshots).forEach(([id, snap]) => {
         renderSummaryNode(id, snap);
       });
@@ -2952,16 +3101,14 @@
         if (body) body.style.opacity = '1';
       });
 
-      // Update the bottom floating timeline chart with the full-flow snapshot.
-      updateTimeline(nodeSnapshots, sim, startAge);
+      // Graph reflects whichever branch is focused (or the full walk when no
+      // Summaries exist).
+      updateTimeline(mergedSnapshots, graphSim, graphStartAge);
 
-      // Trigger confetti if any summary shows a FIRE-level success (final balance > 4x starting)
+      // Confetti on FIRE-level outcome from any branch.
       const anyFire = Object.values(summarySnapshots).some(s =>
         s.failedAtAge === null && s.finalBalance > s.startingBalance * 4
       );
-      // Only fire confetti on explicit Calculate clicks, or when the FIRE
-      // state flips from false -> true during live recalc. This keeps live
-      // updates quiet while still celebrating a genuine milestone.
       if (anyFire && (!silent || !_lastFireState)) setTimeout(confetti, 100);
       _lastFireState = anyFire;
     }
@@ -3224,7 +3371,14 @@
       chartEl.innerHTML = renderChart({ yearlyData: yearly, failedAtAge: sim.failedAtAge }, { wide: true });
       if (badgeEl) {
         const last = yearly[yearly.length - 1];
-        badgeEl.textContent = `Age ${last.age} → ${_tlFmt(last.balance)}`;
+        // When we're plotting a specific branch, suffix the badge with a hint
+        // so it's clear which outcome the numbers belong to when multiple
+        // Summaries exist on the canvas.
+        const summaryCount = nodes.filter(n => n.type === 'summary').length;
+        const branchHint = (summaryCount > 1 && _focusedSummaryId)
+          ? ` · tap a Summary to compare`
+          : '';
+        badgeEl.textContent = `Age ${last.age} → ${_tlFmt(last.balance)}${branchHint}`;
       }
 
       // Cache data for the hover crosshair. startCalendarYear = the calendar
