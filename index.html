@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Retirement Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>FiCalc</title>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     * {
@@ -55,14 +56,48 @@
       gap: 12px;
       z-index: 1000;
       backdrop-filter: blur(12px);
+      /* Allow horizontal scroll on narrow viewports so all buttons remain
+         reachable on iPhone / iPad portrait. */
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      white-space: nowrap;
+    }
+    .toolbar::-webkit-scrollbar { height: 0; display: none; }
+    .toolbar > * { flex-shrink: 0; }
+
+    /* Touch-friendly button sizing on coarse pointers (phones, tablets). */
+    @media (pointer: coarse) {
+      .toolbar { height: 60px; padding: 0 12px; gap: 8px; }
+      .btn { padding: 12px 16px; font-size: 12px; min-height: 44px; }
+      .btn-tiny { padding: 8px 12px; min-height: 36px; }
+      .toolbar-title { font-size: 13px; letter-spacing: 1.5px; }
+      .toolbar-logo { height: 26px; }
+      /* Bigger visible port dot on touch devices. */
+      .port { width: 20px; height: 20px; }
+      .port.input  { left: -11px; margin-top: -10px; }
+      .port.output { right: -11px; margin-top: -10px; }
+      .port.alt    { bottom: -10px; }
+      .port::before { inset: -14px; }
     }
 
     .toolbar-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
       font-size: 14px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 2px;
       color: var(--text-primary);
+    }
+
+    .toolbar-logo {
+      height: 28px;
+      width: auto;
+      display: block;
+      filter: invert(1); /* logo is black on white; invert for our dark UI */
+      opacity: 0.92;
     }
 
     .toolbar-spacer {
@@ -178,6 +213,8 @@
       overflow: hidden;
       background: 
         radial-gradient(circle at center, #161b22 0%, #0d1117 100%);
+      touch-action: none;
+      overscroll-behavior: none;
     }
 
     .canvas-grid {
@@ -258,6 +295,7 @@
       cursor: grab;
       z-index: 10;
       transition: box-shadow 0.15s ease, border-color 0.15s ease;
+      touch-action: none;
     }
 
     .node:hover {
@@ -613,6 +651,16 @@
       cursor: crosshair;
       transition: background 0.15s ease, box-shadow 0.15s ease;
       z-index: 20;
+      touch-action: none;
+    }
+
+    /* Invisible hit area extends the port to ~32px for touch without
+       changing the visual dot size. */
+    .port::before {
+      content: '';
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
     }
 
     .port:hover {
@@ -964,7 +1012,10 @@
 </head>
 <body>
   <div class="toolbar">
-    <div class="toolbar-title">🧮 Retirement Calculator</div>
+    <div class="toolbar-title">
+      <img class="toolbar-logo" src="assets/iBelieveInSwordfish_Logo_Black.webp" alt="iBelieveInSwordfish">
+      <span>FiCalc</span>
+    </div>
     <div class="toolbar-divider"></div>
     <button class="btn btn-node btn-starting" onclick="addNode('starting')">+ Starting</button>
     <button class="btn btn-node btn-expense" onclick="addNode('expense')">+ Expense</button>
@@ -1616,8 +1667,10 @@
         ${fieldsHTML}
       `;
 
-      // Dragging - use canvas coordinates
-      el.addEventListener('mousedown', (e) => {
+      // Dragging - use canvas coordinates (pointer events -> mouse+touch+pen)
+      el.addEventListener('pointerdown', (e) => {
+        // Only respond to primary button (or touch/pen, where button is 0).
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (e.target.classList.contains('port')) return;
         if (e.target.classList.contains('node-delete')) return;
         if (e.target.classList.contains('field-input')) return;
@@ -1684,9 +1737,10 @@
         e.preventDefault();
       });
 
-      // Port connections
+      // Port connections (pointer events for mouse+touch parity)
       el.querySelectorAll('.port').forEach(port => {
-        port.addEventListener('mousedown', (e) => {
+        port.addEventListener('pointerdown', (e) => {
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
           e.stopPropagation();
           e.preventDefault();
           startConnection(nodeData.id, port.dataset.port, e);
@@ -2141,8 +2195,9 @@
 
       drawTempConnection();
 
-      document.addEventListener('mousemove', updateTempConnection);
-      document.addEventListener('mouseup', endConnection);
+      document.addEventListener('pointermove', updateTempConnection);
+      document.addEventListener('pointerup', endConnection);
+      document.addEventListener('pointercancel', endConnection);
     }
 
     function updateTempConnection(e) {
@@ -2166,13 +2221,28 @@
     }
 
     function endConnection(e) {
-      document.removeEventListener('mousemove', updateTempConnection);
-      document.removeEventListener('mouseup', endConnection);
+      document.removeEventListener('pointermove', updateTempConnection);
+      document.removeEventListener('pointerup', endConnection);
+      document.removeEventListener('pointercancel', endConnection);
 
       const tempPath = document.getElementById('temp-connection');
       if (tempPath) tempPath.remove();
 
-      const target = e.target;
+      // For touch/pen, pointerup.target is the pointerdown element (not the
+      // element under the finger at release). Hit-test via elementFromPoint
+      // so touch users can drop onto a target port.
+      let target = e.target;
+      if (e.clientX !== undefined && e.clientY !== undefined) {
+        const hit = document.elementFromPoint(e.clientX, e.clientY);
+        if (hit && hit.classList && hit.classList.contains('port')) {
+          target = hit;
+        } else if (hit) {
+          // Also allow release on the .port::before hit area (which is a
+          // pseudo-element; elementFromPoint returns the .port itself).
+          const portAncestor = hit.closest && hit.closest('.port');
+          if (portAncestor) target = portAncestor;
+        }
+      }
       if (target && target.classList && target.classList.contains('port')) {
         const targetNodeId = target.dataset.node;
         const targetPortType = target.dataset.port;
@@ -2342,10 +2412,43 @@
       /* zoom indicator removed */
     }
 
+    // Active pointers for pinch-zoom + pan on touch.
+    const activePointers = new Map(); // pointerId -> {x, y}
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    let pinchStartPan = { x: 0, y: 0 };
+    let pinchCenter = { x: 0, y: 0 };
+
     function setupCanvasInteraction() {
       applyTransform();
 
-      canvasContainer.addEventListener('mousedown', (e) => {
+      canvasContainer.addEventListener('pointerdown', (e) => {
+        // Track every pointer for potential pinch.
+        if (e.pointerType !== 'mouse') {
+          activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          // Two touches -> start pinch-zoom, cancel any in-progress pan/drag.
+          if (activePointers.size === 2 && !draggingNode && !tempConnection) {
+            isPanning = false;
+            marqueeStart = null;
+            const pts = [...activePointers.values()];
+            const dx = pts[1].x - pts[0].x;
+            const dy = pts[1].y - pts[0].y;
+            pinchStartDist = Math.hypot(dx, dy) || 1;
+            pinchStartZoom = zoom;
+            pinchStartPan = { x: panOffset.x, y: panOffset.y };
+            const containerRect = canvasContainer.getBoundingClientRect();
+            pinchCenter = {
+              x: (pts[0].x + pts[1].x) / 2 - containerRect.left,
+              y: (pts[0].y + pts[1].y) / 2 - containerRect.top,
+            };
+            return;
+          }
+          // If a pinch is already active, don't start a pan on new pointers.
+          if (activePointers.size >= 2) return;
+        } else {
+          if (e.button !== 0) return;
+        }
+
         if (e.target === canvasContainer || e.target === canvas || e.target === canvasGrid || e.target === connectionsLayer) {
           // Remember where the user clicked on empty canvas so that a
           // subsequent "+ Add X" toolbar click can drop the node here.
@@ -2366,7 +2469,28 @@
         }
       });
 
-      document.addEventListener('mousemove', (e) => {
+      document.addEventListener('pointermove', (e) => {
+        // Update tracked pointer position for pinch.
+        if (activePointers.has(e.pointerId)) {
+          activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        }
+
+        // Pinch-zoom takes precedence over pan.
+        if (activePointers.size >= 2 && pinchStartDist > 0) {
+          const pts = [...activePointers.values()];
+          const dx = pts[1].x - pts[0].x;
+          const dy = pts[1].y - pts[0].y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const newZoom = Math.max(0.3, Math.min(2, pinchStartZoom * (dist / pinchStartDist)));
+          const ratio = newZoom / pinchStartZoom;
+          panOffset.x = pinchCenter.x - (pinchCenter.x - pinchStartPan.x) * ratio;
+          panOffset.y = pinchCenter.y - (pinchCenter.y - pinchStartPan.y) * ratio;
+          zoom = newZoom;
+          applyTransform();
+          updateConnections();
+          return;
+        }
+
         if (draggingNode && dragGroup.length) {
           const containerRect = canvasContainer.getBoundingClientRect();
           const mouseCanvasX = (e.clientX - panOffset.x - containerRect.left) / zoom;
@@ -2398,7 +2522,19 @@
         }
       });
 
-      document.addEventListener('mouseup', (e) => {
+      const endPointer = (e) => {
+        if (activePointers.has(e.pointerId)) {
+          activePointers.delete(e.pointerId);
+          if (activePointers.size < 2) pinchStartDist = 0;
+          // If a pinch just ended and one finger is still down, that finger
+          // should NOT resume a pan (it's mid-gesture). We only re-enable
+          // fresh interactions on next pointerdown.
+        }
+      };
+      document.addEventListener('pointercancel', endPointer);
+
+      document.addEventListener('pointerup', (e) => {
+        endPointer(e);
         if (draggingNode) {
           const el = document.getElementById(draggingNode);
           if (el) el.classList.remove('dragging');
