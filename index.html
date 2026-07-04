@@ -2923,7 +2923,7 @@
         if (p) nodeAgeRanges[n.id] = { entryAge: p.exitAge, exitAge: p.exitAge };
       });
 
-      renderAgeBadges(nodeAgeRanges);
+      renderAgeBadges(nodeAgeRanges, nodeSnapshots);
 
       // Resolve each Summary to its parent's snapshot.
       const summarySnapshots = {};
@@ -2967,10 +2967,13 @@
     }
 
     // Update the age badge at the bottom of every node from the per-node
-    // { entryAge, exitAge } map produced by calculate(). Nodes not in the
-    // active flow (dangling / disconnected) get a dim '—'.
-    function renderAgeBadges(ageRanges) {
-      const fmt = (a) => Math.round(a);
+    // { entryAge, exitAge } map plus the post-node balance from nodeSnapshots.
+    // Nodes not in the active flow (dangling / disconnected) get a dim '—'.
+    // Summaries inherit the parent's balance in the summarySnapshots pass, but
+    // we resolve that here too so the badge is populated even before summaries
+    // are rendered.
+    function renderAgeBadges(ageRanges, snapshots) {
+      const fmtAge = (a) => Math.round(a);
       nodes.forEach(n => {
         const badge = document.getElementById('age-badge-' + n.id);
         if (!badge) return;
@@ -2980,9 +2983,22 @@
           badge.classList.add('empty');
           return;
         }
-        const a = fmt(range.entryAge);
-        const b = fmt(range.exitAge);
-        badge.textContent = (a === b) ? `Age ${a}` : `Age ${a} – ${b}`;
+        const a = fmtAge(range.entryAge);
+        const b = fmtAge(range.exitAge);
+        const ageLabel = (a === b) ? `Age ${a}` : `Age ${a} – ${b}`;
+
+        // Post-node balance. For Summaries, walk to the parent snapshot since
+        // Summaries are pure observers and don't get their own snapshot entry.
+        let snap = snapshots[n.id];
+        if (!snap && n.type === 'summary') {
+          const parentEdge = connections.find(c => c.to === n.id);
+          if (parentEdge) snap = snapshots[parentEdge.from];
+        }
+        const balLabel = (snap && typeof snap.currentCapital === 'number')
+          ? ' · ' + _tlFmt(snap.currentCapital)
+          : '';
+
+        badge.textContent = ageLabel + balLabel;
         badge.classList.remove('empty');
       });
     }
